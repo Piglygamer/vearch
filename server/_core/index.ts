@@ -13,6 +13,10 @@ import stripeWebhookRouter from "../api/stripe-webhook";
 import implantRouter from "../api/implants";
 import bankRouter from "../api/bank";
 import paymentMethodsRouter from "../api/payment-methods";
+import adminRouter from "../api/admin";
+import appletDeploymentRouter from "../api/applet-deployment";
+import appletRouter from "../api/applet";
+import monitoringRouter from "../api/monitoring";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -48,6 +52,13 @@ async function startServer() {
   app.use("/api/implants", implantRouter);
   app.use("/api/payments", paymentRouter);
   app.use("/api/bank/payment-methods", paymentMethodsRouter);
+  // Applet API
+  app.use("/api/applet", appletRouter);
+  app.use("/api/applet-deployment", appletDeploymentRouter);
+  // Admin API
+  app.use("/api/admin", adminRouter);
+  // Monitoring API
+  app.use("/api/monitoring", monitoringRouter);
   // Stripe Webhook
   app.use("/api/stripe", stripeWebhookRouter);
   // tRPC API
@@ -68,6 +79,14 @@ async function startServer() {
   // Start self-healing health monitoring
   const { startHealthMonitoring } = await import("../services/selfHealingService");
   startHealthMonitoring(60000); // Check every 60 seconds
+
+  // Start comprehensive monitoring
+  const { startComprehensiveMonitoring } = await import("../services/monitoringService");
+  startComprehensiveMonitoring(30000); // Check every 30 seconds
+
+  // Start auto-renewal service
+  const { startAutoRenewalService } = await import("../services/autoRenewalService");
+  startAutoRenewalService(86400000); // Check every 24 hours
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);

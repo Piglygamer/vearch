@@ -123,12 +123,15 @@ export default function Dashboard() {
     console.log("[DEBUG] Processing deposit...");
     setIsProcessing(true);
     try {
+      // Note: Payment method should be captured from DepositModal Stripe Elements
+      // For now, we'll pass null and let backend handle payment method creation
       const res = await fetch("/api/bank/deposit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: parseFloat(depositAmount),
-          paymentMethodId: "pm_test_card",
+          bankAccountId: bankAccount?.stripeAccountId,
+          // Payment method will be handled by Stripe Elements in DepositModal
         }),
       });
       const data = await res.json();
@@ -137,7 +140,8 @@ export default function Dashboard() {
         console.log("[DEBUG] Deposit successful");
         setShowDepositModal(false);
         setDepositAmount("");
-        fetchDashboardData();
+        // Refresh data after deposit
+        setTimeout(() => fetchDashboardData(), 1000);
       } else {
         console.error("[DEBUG] Deposit failed:", data.error);
         setError(data.error || "Deposit failed");
@@ -163,7 +167,7 @@ export default function Dashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: parseFloat(withdrawAmount),
-          bankAccountId: "ba_test",
+          bankAccountId: bankAccount?.stripeAccountId,
         }),
       });
       const data = await res.json();

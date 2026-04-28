@@ -1,12 +1,48 @@
 import { Router, Request, Response } from "express";
 import { getDb } from "../db";
-import { transactions, InsertTransaction } from "../../drizzle/schema";
+import { transactions, implants, wallets, InsertTransaction } from "../../drizzle/schema";
 import { getAccountBalance } from "../services/stripeService";
 import { getUserBankAccount } from "../services/bankService";
 import { eq, gte, and } from "drizzle-orm";
 import crypto from "crypto";
+import Stripe from "stripe";
 
 const router = Router();
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
+
+/**
+ * Helper: Get user ID from implant ID
+ */
+async function getUserIdFromImplantId(implantId: string): Promise<number | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const implantRecord = await db
+    .select()
+    .from(implants)
+    .where(eq(implants.implantId, implantId))
+    .limit(1);
+
+  if (!implantRecord || implantRecord.length === 0) return null;
+  return implantRecord[0].userId;
+}
+
+/**
+ * Helper: Get implant DB ID from implant ID string
+ */
+async function getImplantDbId(implantId: string): Promise<number | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const implantRecord = await db
+    .select()
+    .from(implants)
+    .where(eq(implants.implantId, implantId))
+    .limit(1);
+
+  if (!implantRecord || implantRecord.length === 0) return null;
+  return implantRecord[0].id;
+}
 
 /**
  * POST /api/applet/authorize
@@ -41,28 +77,16 @@ router.post("/authorize", async (req: Request, res: Response) => {
       });
     }
 
-    // TODO: Look up user by implantId
-    const userId = 1; // Demo user
-
-    // Get user's bank account
-    const bankAccount = await getUserBankAccount(userId);
-    if (!bankAccount) {
+    // Look up user by implantId
+    const userId = await getUserIdFromImplantId(implantId);
+    if (!userId) {
       return res.status(400).json({
         authorized: false,
-        declineReason: "Bank account not found",
+        declineReason: "Implant not found",
       });
     }
 
-    // Check balance
-    const balance = await getAccountBalance(bankAccount.stripeAccountId);
-    if (balance < amount) {
-      return res.status(400).json({
-        authorized: false,
-        declineReason: "Insufficient funds",
-      });
-    }
-
-    // Check daily velocity
+    // Get user's wallet
     const db = await getDb();
     if (!db) {
       return res.status(500).json({
@@ -71,14 +95,38 @@ router.post("/authorize", async (req: Request, res: Response) => {
       });
     }
 
-    // Get today's transactions for this implant
+    const walletRecord = await db
+      .select()
+      .from(wallets)
+      .where(eq(wallets.userId, userId))
+      .limit(1);
+
+    if (!walletRecord || walletRecord.length === 0) {
+      return res.status(400).json({
+        authorized: false,
+        declineReason: "Wallet not found",
+      });
+    }
+
+    const wallet = walletRecord[0];
+    const walletBalance = parseFloat(wallet.balance.toString());
+
+    // Check balance
+    if (walletBalance < amount) {
+      return res.status(400).json({
+        authorized: false,
+        declineReason: "Insufficient funds",
+      });
+    }
+
+    // Get today's transactions for this user
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const todayTransactions = await db
       .select()
       .from(transactions)
-      .where(gte(transactions.createdAt, today));
+      .where(and(eq(transactions.userId, userId), gte(transactions.createdAt, today)));
 
     const dailyTotal = todayTransactions.reduce((sum, t) => sum + parseFloat(t.amount.toString()), 0);
     if (dailyTotal + amount > 5000) {
@@ -90,11 +138,12 @@ router.post("/authorize", async (req: Request, res: Response) => {
 
     // Generate authorization code
     const authCode = crypto.randomBytes(4).toString("hex").toUpperCase();
+    const implantDbId = await getImplantDbId(implantId);
 
     // Store pending transaction
     await db.insert(transactions).values({
       userId,
-      implantId: 1, // TODO: Map implantId to DB ID
+      implantId: implantDbId || undefined,
       transactionType: "payment",
       amount: amount.toString(),
       currency: "USD",
@@ -146,13 +195,22 @@ router.post("/confirm", async (req: Request, res: Response) => {
       });
     }
 
-    // Find pending transaction
-    const txn = await db
+    // Find pending transaction by metadata
+    const allTxns = await db
       .select()
       .from(transactions)
       .where(eq(transactions.status, "pending" as any));
 
-    if (txn.length === 0) {
+    const txn = allTxns.find((t) => {
+      try {
+        const meta = JSON.parse(t.metadata || "{}");
+        return meta.transactionId === transactionId && meta.authCode === authCode;
+      } catch {
+        return false;
+      }
+    });
+
+    if (!txn) {
       return res.status(400).json({
         confirmed: false,
         error: "Transaction not found",
@@ -168,9 +226,25 @@ router.post("/confirm", async (req: Request, res: Response) => {
       });
     }
 
-    // TODO: Process charge via Stripe
-    const userId = txn[0].userId;
-    const amount = parseFloat(txn[0].amount.toString());
+    // Process charge: deduct from wallet
+    if (txn.walletId) {
+      const walletRecord = await db
+        .select()
+        .from(wallets)
+        .where(eq(wallets.id, txn.walletId))
+        .limit(1);
+
+      if (walletRecord && walletRecord.length > 0) {
+        const currentBalance = parseFloat(walletRecord[0].balance.toString());
+        const txnAmount = parseFloat(txn.amount.toString());
+        const newBalance = (currentBalance - txnAmount).toFixed(2);
+
+        await db
+          .update(wallets)
+          .set({ balance: newBalance })
+          .where(eq(wallets.id, txn.walletId));
+      }
+    }
 
     // Generate settlement ID
     const settlementId = `SETTLE_${crypto.randomBytes(8).toString("hex").toUpperCase()}`;
@@ -180,13 +254,14 @@ router.post("/confirm", async (req: Request, res: Response) => {
       .update(transactions)
       .set({
         status: "completed",
+        updatedAt: new Date(),
         metadata: JSON.stringify({
-          ...JSON.parse(txn[0].metadata || "{}"),
+          ...JSON.parse(txn.metadata || "{}"),
           settlementId,
           cryptogram,
         }),
       })
-      .where(eq(transactions.id, txn[0].id));
+      .where(eq(transactions.id, txn.id));
 
     res.json({
       confirmed: true,
@@ -259,17 +334,35 @@ router.get("/balance", async (req: Request, res: Response) => {
       });
     }
 
-    // TODO: Look up user by implantId
-    const userId = 1; // Demo user
-
-    const bankAccount = await getUserBankAccount(userId);
-    if (!bankAccount) {
+    // Look up user by implantId
+    const userId = await getUserIdFromImplantId(implantId);
+    if (!userId) {
       return res.status(400).json({
-        error: "Bank account not found",
+        error: "Implant not found",
       });
     }
 
-    const balance = await getAccountBalance(bankAccount.stripeAccountId);
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({
+        error: "Database unavailable",
+      });
+    }
+
+    // Get wallet
+    const walletRecord = await db
+      .select()
+      .from(wallets)
+      .where(eq(wallets.userId, userId))
+      .limit(1);
+
+    if (!walletRecord || walletRecord.length === 0) {
+      return res.status(400).json({
+        error: "Wallet not found",
+      });
+    }
+
+    const balance = parseFloat(walletRecord[0].balance.toString());
 
     res.json({
       balance,
@@ -299,8 +392,13 @@ router.get("/transactions", async (req: Request, res: Response) => {
       });
     }
 
-    // TODO: Look up user by implantId
-    const userId = 1; // Demo user
+    // Look up user by implantId
+    const userId = await getUserIdFromImplantId(implantId);
+    if (!userId) {
+      return res.status(400).json({
+        error: "Implant not found",
+      });
+    }
 
     const db = await getDb();
     if (!db) {
@@ -309,11 +407,11 @@ router.get("/transactions", async (req: Request, res: Response) => {
       });
     }
 
-    const recentTxns = await db
+    const recentTxns = (await db
       .select()
       .from(transactions)
       .where(eq(transactions.userId, userId))
-      .limit(limit) as any;
+      .limit(limit)) as any;
 
     res.json({
       transactions: recentTxns.map((t: any) => ({
@@ -348,8 +446,14 @@ router.post("/velocity-check", async (req: Request, res: Response) => {
       });
     }
 
-    // TODO: Look up user by implantId
-    const userId = 1; // Demo user
+    // Look up user by implantId
+    const userId = await getUserIdFromImplantId(implantId);
+    if (!userId) {
+      return res.status(400).json({
+        allowed: false,
+        reason: "Implant not found",
+      });
+    }
 
     const db = await getDb();
     if (!db) {
@@ -374,12 +478,12 @@ router.post("/velocity-check", async (req: Request, res: Response) => {
     }
 
     // Check daily limit ($5,000)
-    const today2 = new Date();
-    today2.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const dailyTxns = await db
       .select()
       .from(transactions)
-      .where(and(eq(transactions.userId, userId), gte(transactions.createdAt, today2)));
+      .where(and(eq(transactions.userId, userId), gte(transactions.createdAt, today)));
 
     const dailyTotal = dailyTxns.reduce((sum, t) => sum + parseFloat(t.amount.toString()), 0);
     if (dailyTotal + amount > 5000) {
