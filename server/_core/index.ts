@@ -46,6 +46,7 @@ async function startServer() {
   // Bank API
   app.use("/api/bank", bankRouter);
   app.use("/api/implants", implantRouter);
+  app.use("/api/payments", paymentRouter);
   app.use("/api/bank/payment-methods", paymentMethodsRouter);
   // Stripe Webhook
   app.use("/api/stripe", stripeWebhookRouter);
