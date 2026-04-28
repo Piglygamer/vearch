@@ -8,6 +8,7 @@ import { AlertCircle, Zap, CreditCard, Wallet, TrendingUp, RefreshCw, Plus, Send
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DepositModal } from "@/components/DepositModal";
 
 export default function Dashboard() {
   const [implants, setImplants] = useState<any[]>([]);
@@ -532,35 +533,15 @@ export default function Dashboard() {
       </Dialog>
 
       {/* Deposit Modal */}
-      <Dialog open={showDepositModal} onOpenChange={setShowDepositModal}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Deposit Money</DialogTitle>
-            <DialogDescription>
-              Add funds to your Vearch Bank account
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="deposit-amount">Amount (USD)</Label>
-              <Input
-                id="deposit-amount"
-                type="number"
-                placeholder="0.00"
-                value={depositAmount}
-                onChange={(e) => setDepositAmount(e.target.value)}
-              />
-            </div>
-            <Button
-              onClick={handleDeposit}
-              disabled={isProcessing || !depositAmount}
-              className="w-full bg-magenta-600 hover:bg-magenta-700"
-            >
-              {isProcessing ? "Processing..." : "Deposit"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DepositModal
+        open={showDepositModal}
+        onOpenChange={setShowDepositModal}
+        onSuccess={() => {
+          setDepositAmount("");
+          fetchDashboardData();
+        }}
+        bankAccountId={bankAccount?.stripeAccountId}
+      />
 
       {/* Withdraw Modal */}
       <Dialog open={showWithdrawModal} onOpenChange={setShowWithdrawModal}>
