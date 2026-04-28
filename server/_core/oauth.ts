@@ -59,6 +59,7 @@ export function registerOAuthRoutes(app: Express) {
               currency: "USD",
               status: "active",
               linkedAt: new Date(),
+              expiryDate: null,
             } as any);
           }
         }
