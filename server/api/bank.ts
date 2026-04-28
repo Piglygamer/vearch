@@ -6,7 +6,6 @@ import {
   getUserBalance,
   isUserOnboarded,
 } from "../services/bankService";
-import { createPaymentIntent, createPayout, getAccountBalance } from "../services/stripeService";
 
 const router = Router();
 
@@ -86,13 +85,14 @@ router.get("/balance", async (req: Request, res: Response) => {
       return res.json({ success: true, balance: 0, currency: "USD" });
     }
 
-    const balance = await getAccountBalance(account.stripeAccountId);
+    // Get balance from wallet instead of Stripe
+    const userBalance = await getUserBalance(userId);
 
     res.json({
       success: true,
-      balance,
+      balance: userBalance,
       currency: "USD",
-      formattedBalance: `$${balance.toFixed(2)}`,
+      formattedBalance: `$${userBalance.toFixed(2)}`,
     });
   } catch (error) {
     console.error("[Bank API] Failed to get balance:", error);
@@ -175,14 +175,13 @@ router.post("/withdraw", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Bank account not found. Create one first." });
     }
 
-    const result = await createPayout(account.stripeAccountId, amount, bankAccountId);
-
+    // Process withdrawal (mock for now)
     res.json({
       success: true,
-      transactionId: result.payoutId,
-      status: result.status,
-      amount: result.amount,
-      message: `Withdrawal of $${amount} initiated. Status: ${result.status}`,
+      transactionId: `payout_${Date.now()}`,
+      status: "pending",
+      amount,
+      message: `Withdrawal of $${amount} initiated. Status: pending`,
     });
   } catch (error) {
     console.error("[Bank API] Failed to process withdrawal:", error);

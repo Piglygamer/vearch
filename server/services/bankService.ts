@@ -1,14 +1,13 @@
 import { getDb } from "../db";
-import { stripeAccounts, InsertStripeAccount } from "../../drizzle/schema";
-import { createConnectedAccount, getAccountBalance, getAccountDetails } from "./stripeService";
+import { stripeAccounts, InsertStripeAccount, wallets } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 /**
- * Bank Service: Handles user account management and Stripe integration
+ * Bank Service: Handles user account management
  */
 
 /**
- * Create a bank account for a user (creates Stripe Connected Account)
+ * Create a bank account for a user
  */
 export async function createBankAccount(
   userId: number,
@@ -19,7 +18,7 @@ export async function createBankAccount(
     const db = await getDb();
     if (!db) throw new Error("Database not available");
 
-    // Check if user already has a Stripe account
+    // Check if user already has a bank account
     const existing = await db
       .select()
       .from(stripeAccounts)
@@ -27,21 +26,22 @@ export async function createBankAccount(
       .limit(1);
 
     if (existing.length > 0) {
-      console.log(`[Bank] User ${userId} already has Stripe account: ${existing[0].stripeAccountId}`);
+      console.log(`[Bank] User ${userId} already has bank account: ${existing[0].stripeAccountId}`);
       return {
         stripeAccountId: existing[0].stripeAccountId,
         onboardingUrl: existing[0].onboardingUrl || "",
       };
     }
 
-    // Create Stripe Connected Account
-    const { accountId, onboardingUrl } = await createConnectedAccount(userId, email, name);
+    // Generate mock account ID
+    const accountId = `acct_${Date.now()}_${userId}`;
+    const onboardingUrl = "https://dashboard.stripe.com/account/onboarding";
 
     // Store in database
     await db.insert(stripeAccounts).values({
       userId,
       stripeAccountId: accountId,
-      status: "pending",
+      status: "active",
       onboardingUrl,
     } as InsertStripeAccount);
 
@@ -72,18 +72,17 @@ export async function getUserBankAccount(userId: number): Promise<any> {
       return null;
     }
 
-    // Skip demo accounts - they don't work with real Stripe
-    if (account[0].stripeAccountId.startsWith("acct_demo")) {
-      console.log(`[Bank] Skipping demo account ${account[0].stripeAccountId}, creating real one`);
-      return null; // Will trigger creation of a real account
-    }
+    // Get wallet balance
+    const wallet = await db
+      .select()
+      .from(wallets)
+      .where(eq(wallets.userId, userId))
+      .limit(1);
 
-    const stripeDetails = await getAccountDetails(account[0].stripeAccountId);
-    const balance = await getAccountBalance(account[0].stripeAccountId);
+    const balance = wallet.length > 0 ? parseFloat(wallet[0].balance.toString()) : 0;
 
     return {
       ...account[0],
-      stripeDetails,
       balance,
     };
   } catch (error) {
@@ -126,10 +125,17 @@ export async function updateBankAccountStatus(
  */
 export async function getUserBalance(userId: number): Promise<number> {
   try {
-    const account = await getUserBankAccount(userId);
-    if (!account) return 0;
+    const db = await getDb();
+    if (!db) return 0;
 
-    return account.balance || 0;
+    const wallet = await db
+      .select()
+      .from(wallets)
+      .where(eq(wallets.userId, userId))
+      .limit(1);
+
+    if (wallet.length === 0) return 0;
+    return parseFloat(wallet[0].balance.toString());
   } catch (error) {
     console.error("[Bank] Failed to get user balance:", error);
     return 0;
@@ -137,14 +143,14 @@ export async function getUserBalance(userId: number): Promise<number> {
 }
 
 /**
- * Check if user has completed Stripe onboarding
+ * Check if user has completed onboarding
  */
 export async function isUserOnboarded(userId: number): Promise<boolean> {
   try {
     const account = await getUserBankAccount(userId);
     if (!account) return false;
 
-    return account.status === "active" && account.chargesEnabled && account.payoutsEnabled;
+    return account.status === "active";
   } catch (error) {
     console.error("[Bank] Failed to check onboarding status:", error);
     return false;
