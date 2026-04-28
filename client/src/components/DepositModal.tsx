@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useStripe, useElements, CardElement } from "@stripe/react-stripe-js";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,9 +14,6 @@ interface DepositModalProps {
 }
 
 export function DepositModal({ open, onOpenChange, onSuccess, bankAccountId }: DepositModalProps) {
-  const stripe = useStripe();
-  const elements = useElements();
-  
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,8 +21,13 @@ export function DepositModal({ open, onOpenChange, onSuccess, bankAccountId }: D
   const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!stripe || !elements || !amount || !bankAccountId) {
-      setError("Please fill in all fields");
+    if (!amount) {
+      setError("Please enter a deposit amount");
+      return;
+    }
+    
+    if (parseFloat(amount) <= 0) {
+      setError("Deposit amount must be greater than 0");
       return;
     }
 
@@ -34,32 +35,13 @@ export function DepositModal({ open, onOpenChange, onSuccess, bankAccountId }: D
     setError(null);
 
     try {
-      const cardElement = elements.getElement(CardElement);
-      if (!cardElement) {
-        setError("Card element not found");
-        setIsProcessing(false);
-        return;
-      }
-
-      // Create payment method from card
-      const { error: pmError, paymentMethod } = await stripe.createPaymentMethod({
-        type: "card",
-        card: cardElement,
-      });
-
-      if (pmError) {
-        setError(pmError.message || "Failed to create payment method");
-        setIsProcessing(false);
-        return;
-      }
-
       // Process deposit on backend
       const res = await fetch("/api/bank/deposit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: parseFloat(amount),
-          paymentMethodId: paymentMethod.id,
+          paymentMethodId: "wallet_deposit",
           bankAccountId,
         }),
       });
@@ -68,7 +50,6 @@ export function DepositModal({ open, onOpenChange, onSuccess, bankAccountId }: D
 
       if (data.success) {
         setAmount("");
-        cardElement.clear();
         onOpenChange(false);
         onSuccess();
       } else {
@@ -113,32 +94,11 @@ export function DepositModal({ open, onOpenChange, onSuccess, bankAccountId }: D
             />
           </div>
 
-          <div>
-            <Label htmlFor="card-element">Card Details</Label>
-            <div className="border border-border rounded-md p-3 bg-card">
-              <CardElement
-                id="card-element"
-                options={{
-                  style: {
-                    base: {
-                      fontSize: "16px",
-                      color: "#fff",
-                      "::placeholder": {
-                        color: "#666",
-                      },
-                    },
-                    invalid: {
-                      color: "#fa755a",
-                    },
-                  },
-                }}
-              />
-            </div>
-          </div>
+
 
           <Button
             type="submit"
-            disabled={isProcessing || !stripe || !amount}
+            disabled={isProcessing || !amount}
             className="w-full bg-magenta-600 hover:bg-magenta-700"
           >
             {isProcessing ? "Processing..." : `Deposit $${amount || "0.00"}`}
