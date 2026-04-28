@@ -1,3 +1,4 @@
+import React, { useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,11 +11,12 @@ export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
 
-  // Redirect authenticated users to dashboard
-  if (isAuthenticated && !loading) {
-    navigate("/dashboard");
-    return null;
-  }
+  // Redirect authenticated users to dashboard using useEffect to avoid render-time state updates
+  React.useEffect(() => {
+    if (isAuthenticated && !loading) {
+      navigate("/dashboard");
+    }
+  }, [isAuthenticated, loading, navigate]);
 
   const features = [
     {
