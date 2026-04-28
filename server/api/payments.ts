@@ -2,10 +2,8 @@ import { Router, Request, Response } from "express";
 import { getDb } from "../db";
 import { implants, wallets, transactions } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
-import Stripe from "stripe";
 
 const router = Router();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
 
 /**
  * POST /api/payments/authorize

@@ -3,21 +3,23 @@ import Stripe from "stripe";
 let stripe: any = null;
 let stripeInitialized = false;
 
-const STRIPE_SECRET_KEY = "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";
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 
 try {
-  const apiKey = process.env.STRIPE_SECRET_KEY || STRIPE_SECRET_KEY;
+  const apiKey = STRIPE_SECRET_KEY;
   if (apiKey && apiKey.startsWith("sk_")) {
     stripe = new Stripe(apiKey);
     stripeInitialized = true;
     console.log("[Stripe] Client initialized successfully with live keys");
   } else {
-    console.warn("[Stripe] No valid Stripe API key found.");
+    console.warn("[Stripe] No valid Stripe API key found in environment. Stripe features will be disabled.");
     stripeInitialized = false;
+    stripe = null;
   }
 } catch (error) {
   console.warn("[Stripe] Failed to initialize Stripe client:", error);
   stripeInitialized = false;
+  stripe = null;
 }
 
 /**
