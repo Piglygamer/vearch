@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import paymentRouter from "../api/payment";
 import stripeWebhookRouter from "../api/stripe-webhook";
+import implantRouter from "../api/implants";
 import bankRouter from "../api/bank";
 import paymentMethodsRouter from "../api/payment-methods";
 
@@ -44,6 +45,7 @@ async function startServer() {
   app.use("/api/payment", paymentRouter);
   // Bank API
   app.use("/api/bank", bankRouter);
+  app.use("/api/implants", implantRouter);
   app.use("/api/bank/payment-methods", paymentMethodsRouter);
   // Stripe Webhook
   app.use("/api/stripe", stripeWebhookRouter);
