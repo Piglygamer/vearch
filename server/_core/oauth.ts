@@ -36,6 +36,37 @@ export function registerOAuthRoutes(app: Express) {
         lastSignedIn: new Date(),
       });
 
+      // Auto-create wallet for new users
+      try {
+        const user = await db.getUserByOpenId(userInfo.openId);
+        const database = await db.getDb();
+        if (database && user) {
+          const { wallets } = await import("../../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          
+          const existingWallet = await database
+            .select()
+            .from(wallets)
+            .where(eq(wallets.userId, user.id))
+            .limit(1);
+          
+          if (existingWallet.length === 0) {
+            await database.insert(wallets).values({
+              userId: user.id,
+              walletType: "prepaid",
+              fundingSourceId: `wallet_${user.id}`,
+              balance: "0.00",
+              currency: "USD",
+              status: "active",
+              linkedAt: new Date(),
+            } as any);
+          }
+        }
+      } catch (walletError) {
+        console.error("[OAuth] Failed to create wallet:", walletError);
+        // Don't fail OAuth if wallet creation fails
+      }
+
       const sessionToken = await sdk.createSessionToken(userInfo.openId, {
         name: userInfo.name || "",
         expiresInMs: ONE_YEAR_MS,
