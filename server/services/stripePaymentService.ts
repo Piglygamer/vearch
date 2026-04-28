@@ -1,13 +1,21 @@
 import Stripe from "stripe";
 
 let stripe: any = null;
+let stripeInitialized = false;
 
 try {
-  if (process.env.STRIPE_SECRET_KEY) {
-    stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  const apiKey = process.env.STRIPE_SECRET_KEY || "";
+  if (apiKey && apiKey.startsWith("sk_")) {
+    stripe = new Stripe(apiKey);
+    stripeInitialized = true;
+    console.log("[Stripe Payment] Initialized successfully");
+  } else {
+    console.warn("[Stripe Payment] No valid Stripe API key found. Stripe features disabled.");
+    stripeInitialized = false;
   }
 } catch (error) {
-  console.warn("[Stripe Payment] Failed to initialize Stripe client.");
+  console.warn("[Stripe Payment] Failed to initialize Stripe client:", error);
+  stripeInitialized = false;
 }
 
 /**

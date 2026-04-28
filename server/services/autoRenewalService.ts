@@ -7,7 +7,6 @@
 import { getDb } from "../db";
 import { cards, implants, transactions, wallets } from "../../drizzle/schema";
 import { eq, lt, and } from "drizzle-orm";
-import { getStripeClient } from "./stripeService";
 
 interface RenewalResult {
   success: boolean;
