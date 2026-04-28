@@ -19,15 +19,16 @@ describe("KYC/AML Service", () => {
     if (!db) throw new Error("Database not available");
 
     // Create test user
-    const result = await db.insert(users).values({
+    const testEmail = `test-kyc-${Date.now()}@example.com`;
+    await db.insert(users).values({
       openId: `test-kyc-${Date.now()}`,
       name: "Test User",
-      email: `test-kyc-${Date.now()}@example.com`,
+      email: testEmail,
       loginMethod: "test",
       role: "user",
     });
 
-    const createdUsers = await db.select().from(users).where(eq(users.email, `test-kyc-${Date.now()}@example.com`));
+    const createdUsers = await db.select().from(users).where(eq(users.email, testEmail));
     testUserId = createdUsers[0]?.id || 1;
   });
 

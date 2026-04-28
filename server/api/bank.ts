@@ -1,74 +1,165 @@
 import { Router, Request, Response } from "express";
-import {
-  createBankAccount,
-  getUserBankAccount,
-  updateBankAccountStatus,
-  getUserBalance,
-  isUserOnboarded,
-} from "../services/bankService";
 import { getDb } from "../db";
 import { wallets, transactions } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { processPayment, getAvailableProviders, PaymentProvider } from "../services/unifiedPaymentService";
 
 const router = Router();
 
 /**
- * POST /api/bank/account/create
- * Create a bank account for the user
+ * POST /api/bank/deposit
+ * Deposit money into the account
  */
-router.post("/account/create", async (req: Request, res: Response) => {
+router.post("/deposit", async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || 1;
-    const { email, name } = req.body;
+    const { amount, provider = "paypal" } = req.body;
 
-    if (!email || !name) {
-      return res.status(400).json({ error: "Missing required fields: email, name" });
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: "Invalid deposit amount" });
     }
 
-    const { stripeAccountId, onboardingUrl } = await createBankAccount(userId, email, name);
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    // Auto-create wallet if missing
+    let wallet = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
+
+    if (wallet.length === 0) {
+      console.log(`[Bank] Creating wallet for user ${userId}`);
+      await db.insert(wallets).values({
+        userId,
+        walletType: "prepaid",
+        fundingSourceId: `wallet_${userId}`,
+        balance: "0.00",
+        currency: "USD",
+      });
+
+      wallet = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
+    }
+
+    // Process payment with selected provider
+    const paymentResult = await processPayment({
+      provider: provider as PaymentProvider,
+      amount,
+      currency: "USD",
+      userId,
+      walletId: wallet[0].id,
+      description: `Deposit to Vearch Bank - User ${userId}`,
+    });
+
+    if (!paymentResult.success) {
+      return res.status(400).json({ error: paymentResult.error || "Payment processing failed" });
+    }
+
+    // Log transaction
+    await db.insert(transactions).values({
+      userId,
+      walletId: wallet[0].id as any,
+      transactionType: "topup",
+      amount: amount.toString(),
+      currency: "USD",
+      status: paymentResult.status,
+      description: `${provider.toUpperCase()} deposit of $${amount}`,
+      externalId: paymentResult.transactionId,
+      createdAt: new Date(),
+    } as any);
+
+    // If payment is completed, update wallet immediately
+    if (paymentResult.status === "completed") {
+      const newBalance = parseFloat(wallet[0].balance.toString()) + amount;
+      await db.update(wallets).set({ balance: newBalance.toString() as any }).where(eq(wallets.userId, userId));
+    }
 
     res.json({
       success: true,
-      stripeAccountId,
-      onboardingUrl,
-      message: "Bank account created successfully.",
+      transactionId: paymentResult.transactionId,
+      provider: paymentResult.provider,
+      status: paymentResult.status,
+      amount,
+      redirectUrl: paymentResult.redirectUrl,
+      message: paymentResult.redirectUrl
+        ? `Redirecting to ${provider} to complete deposit of $${amount}`
+        : `Deposit of $${amount} via ${provider} completed successfully`,
     });
   } catch (error) {
-    console.error("[Bank API] Failed to create account:", error);
-    res.status(500).json({ error: "Failed to create bank account" });
+    console.error("[Bank API] Deposit failed:", error);
+    res.status(500).json({ error: "Deposit failed" });
   }
 });
 
 /**
- * GET /api/bank/account
- * Get user's bank account details
+ * POST /api/bank/withdraw
+ * Withdraw money from the account
  */
-router.get("/account", async (req: Request, res: Response) => {
+router.post("/withdraw", async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || 1;
+    const { amount, provider = "paypal" } = req.body;
 
-    const account = await getUserBankAccount(userId);
-
-    if (!account) {
-      return res.json({
-        success: true,
-        account: null,
-        message: "No bank account found. Create one to get started.",
-      });
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: "Invalid withdrawal amount" });
     }
+
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    // Get wallet
+    const wallet = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
+
+    if (wallet.length === 0) {
+      return res.status(400).json({ error: "Wallet not found" });
+    }
+
+    const currentBalance = parseFloat(wallet[0].balance.toString());
+
+    if (currentBalance < amount) {
+      return res.status(400).json({ error: "Insufficient balance" });
+    }
+
+    // Process withdrawal with selected provider
+    const paymentResult = await processPayment({
+      provider: provider as PaymentProvider,
+      amount,
+      currency: "USD",
+      userId,
+      walletId: wallet[0].id,
+      description: `Withdrawal from Vearch Bank - User ${userId}`,
+    });
+
+    if (!paymentResult.success) {
+      return res.status(400).json({ error: paymentResult.error || "Withdrawal processing failed" });
+    }
+
+    // Deduct from wallet
+    const newBalance = currentBalance - amount;
+    await db.update(wallets).set({ balance: newBalance.toString() as any }).where(eq(wallets.userId, userId));
+
+    // Log transaction
+    await db.insert(transactions).values({
+      userId,
+      walletId: wallet[0].id as any,
+      transactionType: "withdrawal",
+      amount: amount.toString(),
+      currency: "USD",
+      status: paymentResult.status,
+      description: `${provider.toUpperCase()} withdrawal of $${amount}`,
+      externalId: paymentResult.transactionId,
+      createdAt: new Date(),
+    } as any);
 
     res.json({
       success: true,
-      account: {
-        id: account.stripeAccountId,
-        status: account.status,
-        chargesEnabled: true,
-        payoutsEnabled: true,
-      },
+      transactionId: paymentResult.transactionId,
+      provider: paymentResult.provider,
+      status: paymentResult.status,
+      amount,
+      newBalance,
+      message: `Withdrawal of $${amount} via ${provider} completed successfully`,
     });
   } catch (error) {
-    console.error("[Bank API] Failed to get account:", error);
-    res.status(500).json({ error: "Failed to get bank account" });
+    console.error("[Bank API] Withdrawal failed:", error);
+    res.status(500).json({ error: "Withdrawal failed" });
   }
 });
 
@@ -80,136 +171,36 @@ router.get("/balance", async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || 1;
 
-    const account = await getUserBankAccount(userId);
-    if (!account) {
-      return res.json({ success: true, balance: 0, currency: "USD" });
-    }
-
-    // Get balance from wallet instead of Stripe
-    const userBalance = await getUserBalance(userId);
-
-    res.json({
-      success: true,
-      balance: userBalance,
-      currency: "USD",
-      formattedBalance: `$${userBalance.toFixed(2)}`,
-    });
-  } catch (error) {
-    console.error("[Bank API] Failed to get balance:", error);
-    res.status(500).json({ error: "Failed to get balance" });
-  }
-});
-
-/**
- * POST /api/bank/deposit
- * Deposit money into the account
- */
-router.post("/deposit", async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user?.id || 1;
-    const { amount, paymentMethodId } = req.body;
-
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ error: "Invalid deposit amount" });
-    }
-
     const db = await getDb();
     if (!db) throw new Error("Database not available");
 
-    // Get or create wallet
+    // Auto-create wallet if missing
     let wallet = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
-    
+
     if (wallet.length === 0) {
-      return res.status(400).json({ error: "Wallet not found. Create one first." });
+      console.log(`[Bank] Creating wallet for user ${userId}`);
+      await db.insert(wallets).values({
+        userId,
+        walletType: "prepaid",
+        fundingSourceId: `wallet_${userId}`,
+        balance: "0.00",
+        currency: "USD",
+      });
+
+      wallet = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
     }
 
-    const newBalance = parseFloat(wallet[0].balance.toString()) + amount;
-    
-    // Update wallet balance
-    await db.update(wallets).set({ balance: newBalance.toString() as any }).where(eq(wallets.userId, userId));
-
-    // Log transaction
-    await db.insert(transactions).values({
-      userId,
-      walletId: wallet[0].id as any,
-      transactionType: "topup",
-      amount: amount.toString(),
-      currency: "USD",
-      status: "completed",
-      description: `Deposit of $${amount}`,
-      createdAt: new Date(),
-    } as any);
+    const balance = parseFloat(wallet[0].balance.toString());
 
     res.json({
       success: true,
-      transactionId: `dep_${Date.now()}`,
-      status: "completed",
-      amount,
-      newBalance,
-      message: `Deposit of $${amount} completed successfully.`,
-    });
-  } catch (error) {
-    console.error("[Bank API] Error during deposit:", error);
-    res.status(500).json({ error: "Failed to process deposit" });
-  }
-});
-
-/**
- * POST /api/bank/withdraw
- * Withdraw money from the account
- */
-router.post("/withdraw", async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user?.id || 1;
-    const { amount, bankAccountId } = req.body;
-
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ error: "Invalid withdrawal amount" });
-    }
-
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-
-    // Get wallet
-    const wallet = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
-    
-    if (wallet.length === 0) {
-      return res.status(400).json({ error: "Wallet not found" });
-    }
-
-    const currentBalance = parseFloat(wallet[0].balance.toString());
-    if (currentBalance < amount) {
-      return res.status(400).json({ error: "Insufficient balance" });
-    }
-
-    const newBalance = currentBalance - amount;
-    
-    // Update wallet balance
-    await db.update(wallets).set({ balance: newBalance.toString() as any }).where(eq(wallets.userId, userId));
-
-    // Log transaction
-    await db.insert(transactions).values({
-      userId,
-      walletId: wallet[0].id as any,
-      transactionType: "payment",
-      amount: amount.toString(),
+      balance,
       currency: "USD",
-      status: "pending",
-      description: `Withdrawal of $${amount}`,
-      createdAt: new Date(),
-    } as any);
-
-    res.json({
-      success: true,
-      transactionId: `wth_${Date.now()}`,
-      status: "pending",
-      amount,
-      newBalance,
-      message: `Withdrawal of $${amount} initiated. Status: pending`,
+      formattedBalance: `$${balance.toFixed(2)}`,
     });
   } catch (error) {
-    console.error("[Bank API] Failed to process withdrawal:", error);
-    res.status(500).json({ error: "Failed to process withdrawal" });
+    console.error("[Bank API] Get balance failed:", error);
+    res.status(500).json({ error: "Failed to get balance" });
   }
 });
 
@@ -224,18 +215,42 @@ router.get("/transactions", async (req: Request, res: Response) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
 
-    const userTransactions = await db
-      .select()
-      .from(transactions)
-      .where(eq(transactions.userId, userId));
+    const userTransactions = await db.select().from(transactions).where(eq(transactions.userId, userId));
 
     res.json({
       success: true,
-      transactions: userTransactions,
+      transactions: userTransactions.map((t: any) => ({
+        id: t.id,
+        type: t.transactionType,
+        amount: parseFloat(t.amount as string),
+        currency: t.currency,
+        status: t.status,
+        description: t.description,
+        createdAt: t.createdAt,
+      })),
     });
   } catch (error) {
-    console.error("[Bank API] Failed to get transactions:", error);
+    console.error("[Bank API] Get transactions failed:", error);
     res.status(500).json({ error: "Failed to get transactions" });
+  }
+});
+
+/**
+ * GET /api/bank/payment-providers
+ * Get available payment providers
+ */
+router.get("/payment-providers", async (req: Request, res: Response) => {
+  try {
+    const providers = getAvailableProviders();
+
+    res.json({
+      success: true,
+      providers,
+      message: `${providers.length} payment provider(s) available`,
+    });
+  } catch (error) {
+    console.error("[Bank API] Get providers failed:", error);
+    res.status(500).json({ error: "Failed to get payment providers" });
   }
 });
 
