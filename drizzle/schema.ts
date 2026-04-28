@@ -173,3 +173,22 @@ export const systemHealth = mysqlTable("systemHealth", {
 
 export type SystemHealth = typeof systemHealth.$inferSelect;
 export type InsertSystemHealth = typeof systemHealth.$inferInsert;
+
+/**
+ * StripeAccounts table: Tracks Stripe Connected Accounts for each user.
+ * Enables multi-user fund isolation and independent payment processing.
+ */
+export const stripeAccounts = mysqlTable("stripeAccounts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  stripeAccountId: varchar("stripeAccountId", { length: 256 }).notNull().unique(),
+  status: mysqlEnum("status", ["pending", "active", "restricted", "suspended"]).default("pending").notNull(),
+  chargesEnabled: boolean("chargesEnabled").default(false),
+  payoutsEnabled: boolean("payoutsEnabled").default(false),
+  onboardingUrl: text("onboardingUrl"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type StripeAccount = typeof stripeAccounts.$inferSelect;
+export type InsertStripeAccount = typeof stripeAccounts.$inferInsert;

@@ -35,9 +35,9 @@ const router = Router();
  * POST /api/payment/implants
  * Link a new implant to the user's account
  */
-router.post("/implants", requireAuth, async (req: Request, res: Response) => {
+router.post("/implants", async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).user?.id || 1; // Demo: default to user 1
     const { implantId, implantType, nxtpayTokenId } = req.body;
 
     if (!implantId || !implantType) {
@@ -94,9 +94,9 @@ router.post("/implants", requireAuth, async (req: Request, res: Response) => {
  * GET /api/payment/implants
  * Get all implants for the user
  */
-router.get("/implants", requireAuth, async (req: Request, res: Response) => {
+router.get("/implants", async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).user?.id || 1; // Demo: default to user 1
     const userImplants = await getImplantsByUserId(userId);
 
     const implantDetails = await Promise.all(
@@ -136,7 +136,7 @@ router.get("/implants", requireAuth, async (req: Request, res: Response) => {
  * GET /api/payment/implants/:implantId/tokens
  * Get all tokens for a specific implant
  */
-router.get("/implants/:implantId/tokens", requireAuth, async (req: Request, res: Response) => {
+router.get("/implants/:implantId/tokens", async (req: Request, res: Response) => {
   try {
     const implantId = parseInt(req.params.implantId);
     const tokens = await getTokensByImplantId(implantId);
@@ -166,7 +166,7 @@ router.get("/implants/:implantId/tokens", requireAuth, async (req: Request, res:
  * POST /api/payment/implants/:implantId/reprovision
  * Manually trigger token re-provisioning for an implant
  */
-router.post("/implants/:implantId/reprovision", requireAuth, async (req: Request, res: Response) => {
+router.post("/implants/:implantId/reprovision", async (req: Request, res: Response) => {
   try {
     const implantId = parseInt(req.params.implantId);
     const result = await reprovisionToken(implantId);
@@ -214,9 +214,9 @@ router.post("/scan-and-reprovision", requireAuth, async (req: Request, res: Resp
  * POST /api/payment/cards
  * Issue a new virtual EMV card
  */
-router.post("/cards", requireAuth, async (req: Request, res: Response) => {
+router.post("/cards", async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).user?.id || 1; // Demo: default to user 1
     const { implantId, cardholderName } = req.body;
 
     const card = await issueCard(userId, implantId, cardholderName);
@@ -245,9 +245,9 @@ router.post("/cards", requireAuth, async (req: Request, res: Response) => {
  * GET /api/payment/cards
  * Get all cards for the user
  */
-router.get("/cards", requireAuth, async (req: Request, res: Response) => {
+router.get("/cards", async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).user?.id || 1; // Demo: default to user 1
     const cards = await getUserCards(userId);
 
     res.json({ success: true, cards });
@@ -265,9 +265,9 @@ router.get("/cards", requireAuth, async (req: Request, res: Response) => {
  * POST /api/payment/wallets
  * Link a new funding source (wallet)
  */
-router.post("/wallets", requireAuth, async (req: Request, res: Response) => {
+router.post("/wallets", async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).user?.id || 1; // Demo: default to user 1
     const { walletType, fundingSourceId, balance, currency } = req.body;
 
     if (!walletType || !fundingSourceId) {
@@ -306,9 +306,9 @@ router.post("/wallets", requireAuth, async (req: Request, res: Response) => {
  * GET /api/payment/wallets
  * Get all wallets for the user
  */
-router.get("/wallets", requireAuth, async (req: Request, res: Response) => {
+router.get("/wallets", async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).user?.id || 1; // Demo: default to user 1
     const wallets = await getWalletsByUserId(userId);
 
     const walletDetails = wallets.map((wallet) => ({
@@ -336,9 +336,9 @@ router.get("/wallets", requireAuth, async (req: Request, res: Response) => {
  * POST /api/payment/transactions
  * Create a new transaction (payment)
  */
-router.post("/transactions", requireAuth, async (req: Request, res: Response) => {
+router.post("/transactions", async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).user?.id || 1; // Demo: default to user 1
     const { cardId, walletId, amount, merchantName, description, transactionType } = req.body;
 
     if (!amount || !merchantName) {
@@ -383,9 +383,9 @@ router.post("/transactions", requireAuth, async (req: Request, res: Response) =>
  * GET /api/payment/transactions
  * Get transaction history for the user
  */
-router.get("/transactions", requireAuth, async (req: Request, res: Response) => {
+router.get("/transactions", async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).user?.id || 1; // Demo: default to user 1
     const limit = parseInt(req.query.limit as string) || 50;
     const transactions = await getTransactionsByUserId(userId, limit);
 

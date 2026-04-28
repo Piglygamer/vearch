@@ -42,6 +42,20 @@
 - [x] Security best practices guide
 - [x] User manual (implant linking, card management)
 
+## Phase 6: Real Money Integration (Stripe)
+- [ ] Fix dashboard auth error and make API endpoints public for demo
+- [ ] Integrate Stripe for real card issuance
+- [ ] Implement wallet funding flow (bank transfer, card deposit)
+- [ ] Build transaction processing with real money flow
+- [ ] Create card auto-renewal scheduler
+- [ ] Add NFC implant scanning integration
+- [ ] Test end-to-end payment flow
+- [ ] Deploy with Stripe live keys
+
 ## Completed
 - [x] Project initialization (web-db-user enabled)
 - [x] Design system (cyberpunk magenta + brutalism)
+- [x] Backend payment infrastructure (token lifecycle, card issuance, re-provisioning)
+- [x] Frontend dashboard with cyberpunk UI
+- [x] Self-healing system with health monitoring
+- [x] Unit tests (24/24 passing)

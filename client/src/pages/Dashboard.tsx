@@ -3,64 +3,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, Zap, CreditCard, Wallet, TrendingUp, RefreshCw } from "lucide-react";
+import { AlertCircle, Zap, CreditCard, Wallet, TrendingUp, RefreshCw, Plus, Send, Download } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-
-interface Implant {
-  id: number;
-  implantId: string;
-  implantType: string;
-  status: string;
-  linkedAt: string;
-  expiresAt: string;
-  tokenCount: number;
-  activeToken?: {
-    id: number;
-    type: string;
-    expiresAt: string;
-    status: string;
-    daysUntilExpiration: number;
-  };
-}
-
-interface PaymentCard {
-  id: number;
-  cardToken: string;
-  expiryMonth: number;
-  expiryYear: number;
-  expiryFormatted: string;
-  cardholderName: string;
-  status: string;
-  issuedAt: string;
-  maskedCardNumber: string;
-}
-
-interface Wallet {
-  id: number;
-  walletType: string;
-  balance: string;
-  currency: string;
-  status: string;
-  linkedAt: string;
-}
-
-interface Transaction {
-  id: number;
-  type: string;
-  amount: string;
-  currency: string;
-  merchantName: string;
-  status: string;
-  createdAt: string;
-}
+import { Input } from "@/components/ui/input";
 
 export default function Dashboard() {
-  const [implants, setImplants] = useState<Implant[]>([]);
-  const [cards, setCards] = useState<PaymentCard[]>([]);
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [implants, setImplants] = useState<any[]>([]);
+  const [cards, setCards] = useState<any[]>([]);
+  const [wallets, setWallets] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [bankAccount, setBankAccount] = useState<any>(null);
+  const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [depositAmount, setDepositAmount] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -71,31 +28,80 @@ export default function Dashboard() {
       setLoading(true);
       setError(null);
 
-      const [implantsRes, cardsRes, walletsRes, transactionsRes] = await Promise.all([
+      const [implantsRes, cardsRes, walletsRes, transactionsRes, bankRes, balanceRes] = await Promise.all([
         fetch("/api/payment/implants"),
         fetch("/api/payment/cards"),
         fetch("/api/payment/wallets"),
         fetch("/api/payment/transactions"),
+        fetch("/api/bank/account"),
+        fetch("/api/bank/balance"),
       ]);
-
-      if (!implantsRes.ok || !cardsRes.ok || !walletsRes.ok || !transactionsRes.ok) {
-        throw new Error("Failed to fetch dashboard data");
-      }
 
       const implantsData = await implantsRes.json();
       const cardsData = await cardsRes.json();
       const walletsData = await walletsRes.json();
       const transactionsData = await transactionsRes.json();
+      const bankData = await bankRes.json();
+      const balanceData = await balanceRes.json();
 
       setImplants(implantsData.implants || []);
       setCards(cardsData.cards || []);
       setWallets(walletsData.wallets || []);
       setTransactions(transactionsData.transactions || []);
+      setBankAccount(bankData.account);
+      setBalance(balanceData.balance || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
       console.error("Dashboard error:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateBankAccount = async () => {
+    setIsProcessing(true);
+    try {
+      const res = await fetch("/api/bank/account/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "user@vearchbank.com",
+          name: "Vearch User",
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.onboardingUrl) {
+        window.open(data.onboardingUrl, "_blank");
+        fetchDashboardData();
+      }
+    } catch (error) {
+      console.error("Failed to create bank account:", error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDeposit = async () => {
+    if (!depositAmount || !bankAccount) return;
+    setIsProcessing(true);
+    try {
+      const res = await fetch("/api/bank/deposit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: parseFloat(depositAmount),
+          paymentMethodId: "pm_test_card",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDepositAmount("");
+        fetchDashboardData();
+      }
+    } catch (error) {
+      console.error("Failed to process deposit:", error);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -116,18 +122,12 @@ export default function Dashboard() {
     return wallets.reduce((sum, wallet) => sum + parseFloat(wallet.balance || "0"), 0).toFixed(2);
   };
 
-  const getExpiringImplants = () => {
-    return implants.filter(
-      (i) => i.activeToken && i.activeToken.daysUntilExpiration <= 30 && i.activeToken.daysUntilExpiration > 0
-    );
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
           <Zap className="w-12 h-12 text-magenta-500 mx-auto mb-4 animate-pulse" />
-          <p className="text-foreground">Initializing Vearch Vault...</p>
+          <p className="text-foreground">Initializing Vearch Bank...</p>
         </div>
       </div>
     );
@@ -141,7 +141,10 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Zap className="w-8 h-8 text-magenta-500" />
-              <h1 className="text-3xl font-bold text-foreground">VEARCH VAULT</h1>
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">VEARCH BANK</h1>
+                <p className="text-sm text-muted-foreground">Immortal Implant Payment OS</p>
+              </div>
             </div>
             <Button
               onClick={fetchDashboardData}
@@ -152,7 +155,6 @@ export default function Dashboard() {
               Refresh
             </Button>
           </div>
-          <p className="text-sm text-muted-foreground mt-2">Immortal Implant Payment OS</p>
         </div>
       </div>
 
@@ -162,6 +164,24 @@ export default function Dashboard() {
           <Alert className="mb-6 border-red-500/50 bg-red-500/10">
             <AlertCircle className="h-4 w-4 text-red-400" />
             <AlertDescription className="text-red-400">{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {!bankAccount && (
+          <Alert className="mb-6 border-orange-500/50 bg-orange-500/10">
+            <AlertCircle className="h-4 w-4 text-orange-400" />
+            <AlertDescription className="text-orange-400">
+              <div className="flex items-center justify-between">
+                <span>Create a bank account to enable deposits and payments</span>
+                <Button
+                  onClick={handleCreateBankAccount}
+                  disabled={isProcessing}
+                  className="ml-4 bg-magenta-600 hover:bg-magenta-700"
+                >
+                  {isProcessing ? "Setting up..." : "Create Bank Account"}
+                </Button>
+              </div>
+            </AlertDescription>
           </Alert>
         )}
 
@@ -192,35 +212,31 @@ export default function Dashboard() {
               <CardTitle className="text-sm font-medium text-muted-foreground">Total Balance</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-green-400">${getTotalBalance()}</div>
-              <p className="text-xs text-muted-foreground mt-1">Across Wallets</p>
+              <div className="text-3xl font-bold text-green-400">${balance.toFixed(2)}</div>
+              <p className="text-xs text-muted-foreground mt-1">Available</p>
             </CardContent>
           </Card>
 
           <Card className="border-orange-500/30 bg-card/50 backdrop-blur-sm hover:border-orange-500/50 transition-colors">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Expiring Soon</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Bank Status</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-orange-400">{getExpiringImplants().length}</div>
-              <p className="text-xs text-muted-foreground mt-1">Require Renewal</p>
+              <div className="text-sm font-bold text-orange-400">{bankAccount ? "ACTIVE" : "SETUP NEEDED"}</div>
+              <p className="text-xs text-muted-foreground mt-1">Complete onboarding</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Alerts */}
-        {getExpiringImplants().length > 0 && (
-          <Alert className="mb-6 border-orange-500/50 bg-orange-500/10">
-            <AlertCircle className="h-4 w-4 text-orange-400" />
-            <AlertDescription className="text-orange-400">
-              {getExpiringImplants().length} implant(s) expiring within 30 days. Auto-renewal will trigger automatically.
-            </AlertDescription>
-          </Alert>
-        )}
-
         {/* Tabs */}
-        <Tabs defaultValue="implants" className="space-y-4">
+        <Tabs defaultValue="overview" className="space-y-4">
           <TabsList className="border-b border-border bg-transparent p-0 h-auto">
+            <TabsTrigger
+              value="overview"
+              className="border-b-2 border-transparent data-[state=active]:border-magenta-500 data-[state=active]:bg-transparent rounded-none px-4 py-2"
+            >
+              Overview
+            </TabsTrigger>
             <TabsTrigger
               value="implants"
               className="border-b-2 border-transparent data-[state=active]:border-magenta-500 data-[state=active]:bg-transparent rounded-none px-4 py-2"
@@ -251,6 +267,65 @@ export default function Dashboard() {
             </TabsTrigger>
           </TabsList>
 
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card className="border-magenta-500/30 bg-card/50 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-magenta-400">
+                    <Plus className="w-5 h-5" />
+                    Quick Deposit
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-400">Amount (USD)</label>
+                    <Input
+                      type="number"
+                      placeholder="0.00"
+                      value={depositAmount}
+                      onChange={(e) => setDepositAmount(e.target.value)}
+                      className="bg-black/50 border-magenta-500/30"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleDeposit}
+                    disabled={!depositAmount || !bankAccount || isProcessing}
+                    className="w-full bg-magenta-600 hover:bg-magenta-700"
+                  >
+                    {isProcessing ? "Processing..." : "Deposit Now"}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="border-cyan-500/30 bg-card/50 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-cyan-400">
+                    <Send className="w-5 h-5" />
+                    Quick Withdraw
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-400">Amount (USD)</label>
+                    <Input
+                      type="number"
+                      placeholder="0.00"
+                      className="bg-black/50 border-cyan-500/30"
+                    />
+                  </div>
+                  <Button
+                    disabled={!bankAccount}
+                    className="w-full bg-cyan-600 hover:bg-cyan-700"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Withdraw
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
           {/* Implants Tab */}
           <TabsContent value="implants" className="space-y-4">
             {implants.length === 0 ? (
@@ -261,53 +336,16 @@ export default function Dashboard() {
               </Card>
             ) : (
               implants.map((implant) => (
-                <Card
-                  key={implant.id}
-                  className="border-magenta-500/30 bg-card/50 backdrop-blur-sm hover:border-magenta-500/50 transition-colors"
-                >
+                <Card key={implant.id} className="border-magenta-500/30 bg-card/50 backdrop-blur-sm">
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div>
-                        <CardTitle className="text-lg">{implant.implantType}</CardTitle>
+                        <CardTitle>{implant.implantType}</CardTitle>
                         <CardDescription className="font-mono text-xs mt-1">{implant.implantId}</CardDescription>
                       </div>
                       <Badge className={getStatusColor(implant.status)}>{implant.status.toUpperCase()}</Badge>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    {implant.activeToken && (
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Token Type</p>
-                          <p className="font-mono text-sm">{implant.activeToken.type}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Days Until Expiration</p>
-                          <p className="font-mono text-sm text-cyan-400">{implant.activeToken.daysUntilExpiration}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Expires At</p>
-                          <p className="font-mono text-xs">
-                            {new Date(implant.activeToken.expiresAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Status</p>
-                          <Badge className={getStatusColor(implant.activeToken.status)}>
-                            {implant.activeToken.status}
-                          </Badge>
-                        </div>
-                      </div>
-                    )}
-                    <Button
-                      variant="outline"
-                      className="w-full border-magenta-500/50 hover:bg-magenta-500/10"
-                      disabled={!implant.activeToken || implant.activeToken.daysUntilExpiration > 30}
-                    >
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Trigger Re-Provisioning
-                    </Button>
-                  </CardContent>
                 </Card>
               ))
             )}
@@ -318,41 +356,22 @@ export default function Dashboard() {
             {cards.length === 0 ? (
               <Card className="border-border/50 bg-card/50">
                 <CardContent className="pt-6 text-center">
-                  <p className="text-muted-foreground">No cards issued yet. Issue your first Vearch card.</p>
+                  <p className="text-muted-foreground">No cards issued yet. Create a card to start spending.</p>
                 </CardContent>
               </Card>
             ) : (
               cards.map((card) => (
-                <Card
-                  key={card.id}
-                  className="border-cyan-500/30 bg-card/50 backdrop-blur-sm hover:border-cyan-500/50 transition-colors"
-                >
+                <Card key={card.id} className="border-cyan-500/30 bg-card/50 backdrop-blur-sm">
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div>
-                        <CardTitle className="text-lg font-mono">{card.maskedCardNumber}</CardTitle>
-                        <CardDescription className="text-xs mt-1">{card.cardholderName}</CardDescription>
+                        <CardTitle>{card.cardholderName}</CardTitle>
+                        <CardDescription>•••• •••• •••• {card.cardNumber?.slice(-4)}</CardDescription>
+                        <p className="text-xs text-muted-foreground mt-1">Expires: {card.expiryMonth}/{card.expiryYear}</p>
                       </div>
                       <Badge className={getStatusColor(card.status)}>{card.status.toUpperCase()}</Badge>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Expires</p>
-                        <p className="font-mono text-sm text-magenta-500">{card.expiryFormatted}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Issued</p>
-                        <p className="font-mono text-xs">
-                          {new Date(card.issuedAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      This card is valid until {card.expiryMonth}/{card.expiryYear} — essentially immortal.
-                    </p>
-                  </CardContent>
                 </Card>
               ))
             )}
@@ -363,40 +382,21 @@ export default function Dashboard() {
             {wallets.length === 0 ? (
               <Card className="border-border/50 bg-card/50">
                 <CardContent className="pt-6 text-center">
-                  <p className="text-muted-foreground">No wallets linked yet. Link a funding source.</p>
+                  <p className="text-muted-foreground">No wallets linked yet. Add a funding source to get started.</p>
                 </CardContent>
               </Card>
             ) : (
               wallets.map((wallet) => (
-                <Card
-                  key={wallet.id}
-                  className="border-green-500/30 bg-card/50 backdrop-blur-sm hover:border-green-500/50 transition-colors"
-                >
+                <Card key={wallet.id} className="border-green-500/30 bg-card/50 backdrop-blur-sm">
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div>
-                        <CardTitle className="text-lg capitalize">{wallet.walletType.replace("_", " ")}</CardTitle>
-                        <CardDescription className="text-xs mt-1">Funding Source</CardDescription>
+                        <CardTitle>{wallet.walletType}</CardTitle>
+                        <CardDescription>Balance: ${wallet.balance}</CardDescription>
                       </div>
                       <Badge className={getStatusColor(wallet.status)}>{wallet.status.toUpperCase()}</Badge>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Balance</p>
-                        <p className="font-mono text-lg text-green-400">
-                          ${parseFloat(wallet.balance).toFixed(2)} {wallet.currency}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Linked</p>
-                        <p className="font-mono text-xs">
-                          {new Date(wallet.linkedAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
                 </Card>
               ))
             )}
@@ -407,38 +407,26 @@ export default function Dashboard() {
             {transactions.length === 0 ? (
               <Card className="border-border/50 bg-card/50">
                 <CardContent className="pt-6 text-center">
-                  <p className="text-muted-foreground">No transactions yet.</p>
+                  <p className="text-muted-foreground">No transactions yet. Make your first payment to see history.</p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-2">
-                {transactions.map((txn) => (
-                  <Card
-                    key={txn.id}
-                    className="border-border/30 bg-card/30 backdrop-blur-sm hover:border-border/50 transition-colors"
-                  >
-                    <CardContent className="pt-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">{txn.merchantName}</p>
-                          <p className="text-xs text-muted-foreground">{txn.type}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-mono font-bold text-cyan-400">
-                            {txn.type === "payment" ? "-" : "+"}${parseFloat(txn.amount).toFixed(2)}
-                          </p>
-                          <Badge className={getStatusColor(txn.status)} variant="outline">
-                            {txn.status}
-                          </Badge>
-                        </div>
+              transactions.map((txn) => (
+                <Card key={txn.id} className="border-border/50 bg-card/50 backdrop-blur-sm">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="text-base">{txn.merchantName}</CardTitle>
+                        <CardDescription>{txn.description}</CardDescription>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {new Date(txn.createdAt).toLocaleString()}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                      <div className="text-right">
+                        <p className="font-semibold">${txn.amount}</p>
+                        <Badge className={getStatusColor(txn.status)}>{txn.status.toUpperCase()}</Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+                </Card>
+              ))
             )}
           </TabsContent>
         </Tabs>

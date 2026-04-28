@@ -9,6 +9,8 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import paymentRouter from "../api/payment";
+import stripeWebhookRouter from "../api/stripe-webhook";
+import bankRouter from "../api/bank";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -39,6 +41,10 @@ async function startServer() {
   registerOAuthRoutes(app);
   // Payment API
   app.use("/api/payment", paymentRouter);
+  // Bank API
+  app.use("/api/bank", bankRouter);
+  // Stripe Webhook
+  app.use("/api/stripe", stripeWebhookRouter);
   // tRPC API
   app.use(
     "/api/trpc",
