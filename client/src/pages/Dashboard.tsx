@@ -3,9 +3,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertCircle, Zap, CreditCard, Wallet, TrendingUp, RefreshCw, Plus, Send, Download } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function Dashboard() {
   const [implants, setImplants] = useState<any[]>([]);
@@ -16,16 +18,27 @@ export default function Dashboard() {
   const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Modal states
+  const [showBankModal, setShowBankModal] = useState(false);
+  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  
+  // Form states
+  const [bankEmail, setBankEmail] = useState("");
+  const [bankName, setBankName] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
+    const interval = setInterval(fetchDashboardData, 5000); // Auto-refresh every 5 seconds
+    return () => clearInterval(interval);
   }, []);
 
   const fetchDashboardData = async () => {
     try {
-      setLoading(true);
       setError(null);
 
       const [implantsRes, cardsRes, walletsRes, transactionsRes, bankRes, balanceRes] = await Promise.all([
@@ -50,39 +63,61 @@ export default function Dashboard() {
       setTransactions(transactionsData.transactions || []);
       setBankAccount(bankData.account);
       setBalance(balanceData.balance || 0);
+      setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-      console.error("Dashboard error:", err);
-    } finally {
+      setError(err instanceof Error ? err.message : "Failed to load data");
       setLoading(false);
     }
   };
 
   const handleCreateBankAccount = async () => {
+    if (!bankEmail || !bankName) {
+      setError("Please enter email and name");
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const res = await fetch("/api/bank/account/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: "user@vearchbank.com",
-          name: "Vearch User",
+          email: bankEmail,
+          name: bankName,
         }),
       });
       const data = await res.json();
+      
       if (data.success && data.onboardingUrl) {
+        // Open Stripe onboarding in a new tab
         window.open(data.onboardingUrl, "_blank");
-        fetchDashboardData();
+        
+        // Close modal and reset form
+        setShowBankModal(false);
+        setBankEmail("");
+        setBankName("");
+        
+        // Refresh data after a delay
+        setTimeout(() => {
+          fetchDashboardData();
+        }, 2000);
+      } else {
+        setError(data.error || "Failed to create bank account");
       }
     } catch (error) {
-      console.error("Failed to create bank account:", error);
+      setError("Error creating bank account");
+      console.error(error);
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleDeposit = async () => {
-    if (!depositAmount || !bankAccount) return;
+    if (!depositAmount || !bankAccount) {
+      setError("Please enter amount and create bank account first");
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const res = await fetch("/api/bank/deposit", {
@@ -94,12 +129,50 @@ export default function Dashboard() {
         }),
       });
       const data = await res.json();
+      
       if (data.success) {
+        setShowDepositModal(false);
         setDepositAmount("");
         fetchDashboardData();
+      } else {
+        setError(data.error || "Deposit failed");
       }
     } catch (error) {
-      console.error("Failed to process deposit:", error);
+      setError("Error processing deposit");
+      console.error(error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!withdrawAmount || !bankAccount) {
+      setError("Please enter amount and create bank account first");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const res = await fetch("/api/bank/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: parseFloat(withdrawAmount),
+          bankAccountId: "ba_test",
+        }),
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        setShowWithdrawModal(false);
+        setWithdrawAmount("");
+        fetchDashboardData();
+      } else {
+        setError(data.error || "Withdrawal failed");
+      }
+    } catch (error) {
+      setError("Error processing withdrawal");
+      console.error(error);
     } finally {
       setIsProcessing(false);
     }
@@ -118,10 +191,6 @@ export default function Dashboard() {
     }
   };
 
-  const getTotalBalance = () => {
-    return wallets.reduce((sum, wallet) => sum + parseFloat(wallet.balance || "0"), 0).toFixed(2);
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -136,7 +205,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -174,11 +243,10 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <span>Create a bank account to enable deposits and payments</span>
                 <Button
-                  onClick={handleCreateBankAccount}
-                  disabled={isProcessing}
+                  onClick={() => setShowBankModal(true)}
                   className="ml-4 bg-magenta-600 hover:bg-magenta-700"
                 >
-                  {isProcessing ? "Setting up..." : "Create Bank Account"}
+                  Create Bank Account
                 </Button>
               </div>
             </AlertDescription>
@@ -278,22 +346,14 @@ export default function Dashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm text-gray-400">Amount (USD)</label>
-                    <Input
-                      type="number"
-                      placeholder="0.00"
-                      value={depositAmount}
-                      onChange={(e) => setDepositAmount(e.target.value)}
-                      className="bg-black/50 border-magenta-500/30"
-                    />
-                  </div>
+                  <p className="text-sm text-gray-400">Add money to your Vearch Bank account</p>
                   <Button
-                    onClick={handleDeposit}
-                    disabled={!depositAmount || !bankAccount || isProcessing}
+                    onClick={() => setShowDepositModal(true)}
+                    disabled={!bankAccount}
                     className="w-full bg-magenta-600 hover:bg-magenta-700"
                   >
-                    {isProcessing ? "Processing..." : "Deposit Now"}
+                    <Plus className="w-4 h-4 mr-2" />
+                    Deposit Now
                   </Button>
                 </CardContent>
               </Card>
@@ -306,15 +366,9 @@ export default function Dashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm text-gray-400">Amount (USD)</label>
-                    <Input
-                      type="number"
-                      placeholder="0.00"
-                      className="bg-black/50 border-cyan-500/30"
-                    />
-                  </div>
+                  <p className="text-sm text-gray-400">Withdraw money to your bank account</p>
                   <Button
+                    onClick={() => setShowWithdrawModal(true)}
                     disabled={!bankAccount}
                     className="w-full bg-cyan-600 hover:bg-cyan-700"
                   >
@@ -431,6 +485,109 @@ export default function Dashboard() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Bank Account Modal */}
+      <Dialog open={showBankModal} onOpenChange={setShowBankModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Create Bank Account</DialogTitle>
+            <DialogDescription>
+              Set up your Vearch Bank account with Stripe. You'll be redirected to complete onboarding.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="bank-email">Email</Label>
+              <Input
+                id="bank-email"
+                type="email"
+                placeholder="your@email.com"
+                value={bankEmail}
+                onChange={(e) => setBankEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="bank-name">Full Name</Label>
+              <Input
+                id="bank-name"
+                type="text"
+                placeholder="John Doe"
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+              />
+            </div>
+            <Button
+              onClick={handleCreateBankAccount}
+              disabled={isProcessing || !bankEmail || !bankName}
+              className="w-full bg-magenta-600 hover:bg-magenta-700"
+            >
+              {isProcessing ? "Creating..." : "Create & Continue to Stripe"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deposit Modal */}
+      <Dialog open={showDepositModal} onOpenChange={setShowDepositModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Deposit Money</DialogTitle>
+            <DialogDescription>
+              Add funds to your Vearch Bank account
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="deposit-amount">Amount (USD)</Label>
+              <Input
+                id="deposit-amount"
+                type="number"
+                placeholder="0.00"
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(e.target.value)}
+              />
+            </div>
+            <Button
+              onClick={handleDeposit}
+              disabled={isProcessing || !depositAmount}
+              className="w-full bg-magenta-600 hover:bg-magenta-700"
+            >
+              {isProcessing ? "Processing..." : "Deposit"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Withdraw Modal */}
+      <Dialog open={showWithdrawModal} onOpenChange={setShowWithdrawModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Withdraw Money</DialogTitle>
+            <DialogDescription>
+              Withdraw funds from your Vearch Bank account
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="withdraw-amount">Amount (USD)</Label>
+              <Input
+                id="withdraw-amount"
+                type="number"
+                placeholder="0.00"
+                value={withdrawAmount}
+                onChange={(e) => setWithdrawAmount(e.target.value)}
+              />
+            </div>
+            <Button
+              onClick={handleWithdraw}
+              disabled={isProcessing || !withdrawAmount}
+              className="w-full bg-cyan-600 hover:bg-cyan-700"
+            >
+              {isProcessing ? "Processing..." : "Withdraw"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

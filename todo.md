@@ -43,14 +43,14 @@
 - [x] User manual (implant linking, card management)
 
 ## Phase 6: Real Money Integration (Stripe)
-- [ ] Fix dashboard auth error and make API endpoints public for demo
-- [ ] Integrate Stripe for real card issuance
-- [ ] Implement wallet funding flow (bank transfer, card deposit)
-- [ ] Build transaction processing with real money flow
-- [ ] Create card auto-renewal scheduler
-- [ ] Add NFC implant scanning integration
-- [ ] Test end-to-end payment flow
-- [ ] Deploy with Stripe live keys
+- [x] Fix dashboard auth error and make API endpoints public for demo
+- [x] Integrate Stripe for real card issuance
+- [x] Implement wallet funding flow (bank transfer, card deposit)
+- [x] Build transaction processing with real money flow
+- [x] Create card auto-renewal scheduler
+- [ ] Add NFC implant scanning integration (in progress)
+- [x] Test end-to-end payment flow
+- [x] Deploy with Stripe live keys
 
 ## Completed
 - [x] Project initialization (web-db-user enabled)
@@ -59,3 +59,14 @@
 - [x] Frontend dashboard with cyberpunk UI
 - [x] Self-healing system with health monitoring
 - [x] Unit tests (24/24 passing)
+
+
+## Phase 7: Apex Flex EMV Applet Integration
+- [ ] Design EMV applet architecture for Apex Flex
+- [ ] Build EMV applet code (NFC payment logic, authentication)
+- [ ] Create Fedezmo app integration for applet deployment
+- [ ] Build Vearch Bank API endpoints for applet communication
+- [ ] Implement applet auto-update and renewal mechanism
+- [ ] Create applet deployment and management dashboard
+- [ ] Test end-to-end implant payment flow (tap to pay)
+- [ ] Verify EMV certification path and compliance
