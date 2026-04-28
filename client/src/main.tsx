@@ -12,6 +12,8 @@ import "./index.css";
 
 const stripePromise = loadStripe("pk_live_51McGJ42nZsNbWnNOTdELhtgZHR3e6sSB0IKGb5G5xUN9EoeXboOSyRUfrbwfQSFAgBGeaPS2adh3MQEy1AoQu8lD00VBaGZm4g");
 
+const queryClient = new QueryClient();
+
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
@@ -23,7 +25,7 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   window.location.href = getLoginUrl();
 };
 
-queryClient.getQueryCache().subscribe(event => {
+queryClient.getQueryCache().subscribe((event: any) => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.query.state.error;
     redirectToLoginIfUnauthorized(error);
@@ -31,7 +33,7 @@ queryClient.getQueryCache().subscribe(event => {
   }
 });
 
-queryClient.getMutationCache().subscribe(event => {
+queryClient.getMutationCache().subscribe((event: any) => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.mutation.state.error;
     redirectToLoginIfUnauthorized(error);
