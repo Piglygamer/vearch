@@ -6,7 +6,7 @@ import {
   getUserBalance,
   isUserOnboarded,
 } from "../services/bankService";
-import { processDeposit, processWithdrawal, getAccountBalance } from "../services/stripeService";
+import { createPaymentIntent, createPayout, getAccountBalance } from "../services/stripeService";
 
 const router = Router();
 
@@ -118,11 +118,11 @@ router.post("/deposit", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Bank account not found. Create one first." });
     }
 
-    const result = await processDeposit(account.stripeAccountId, paymentMethodId, amount);
+    const result = await createPaymentIntent(account.stripeAccountId, amount);
 
     res.json({
       success: true,
-      transactionId: result.transactionId,
+      transactionId: result.paymentIntentId,
       status: result.status,
       amount: result.amount,
       message: `Deposit of $${amount} initiated. Status: ${result.status}`,
@@ -151,11 +151,11 @@ router.post("/withdraw", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Bank account not found. Create one first." });
     }
 
-    const result = await processWithdrawal(account.stripeAccountId, bankAccountId, amount);
+    const result = await createPayout(account.stripeAccountId, amount, bankAccountId);
 
     res.json({
       success: true,
-      transactionId: result.transactionId,
+      transactionId: result.payoutId,
       status: result.status,
       amount: result.amount,
       message: `Withdrawal of $${amount} initiated. Status: ${result.status}`,
