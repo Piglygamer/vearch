@@ -24,6 +24,13 @@ try {
  * Stripe Service: Handles real card issuance, payment processing, and account management
  */
 
+/**
+ * Get the Stripe client instance
+ */
+export function getStripeClient() {
+  return stripe;
+}
+
 // ============================================================================
 // CONNECTED ACCOUNTS (Multi-user isolation)
 // ============================================================================
@@ -38,15 +45,9 @@ export async function createConnectedAccount(
   name: string
 ): Promise<{ accountId: string; onboardingUrl: string }> {
   try {
-    // Demo mode if Stripe not initialized
+    // Stripe MUST be initialized
     if (!stripeInitialized || !stripe) {
-      console.log(`[Stripe] Demo mode: Creating demo account for user ${userId}`);
-      const demoAccountId = `acct_demo_${userId}_${Date.now()}`;
-      const demoOnboardingUrl = `https://dashboard.stripe.com/account/onboarding?account=${demoAccountId}`;
-      return {
-        accountId: demoAccountId,
-        onboardingUrl: demoOnboardingUrl,
-      };
+      throw new Error("Stripe not initialized. Cannot create real bank account.");
     }
 
     const account = await stripe.accounts.create({
@@ -79,12 +80,7 @@ export async function createConnectedAccount(
     };
   } catch (error) {
     console.error("[Stripe] Failed to create connected account:", error);
-    // Fallback to demo mode on error
-    const demoAccountId = `acct_demo_${userId}_${Date.now()}`;
-    return {
-      accountId: demoAccountId,
-      onboardingUrl: `https://dashboard.stripe.com/account/onboarding?account=${demoAccountId}`,
-    };
+    throw error; // Don't fallback to demo — fail loudly so user knows there's an issue
   }
 }
 
@@ -203,13 +199,7 @@ export async function createPaymentIntent(
 }> {
   try {
     if (!stripeInitialized || !stripe) {
-      // Demo mode
-      return {
-        clientSecret: `pi_demo_secret_${Date.now()}`,
-        paymentIntentId: `pi_demo_${Date.now()}`,
-        amount,
-        status: "succeeded",
-      };
+      throw new Error("Stripe not initialized. Cannot process real deposits.");
     }
 
     const paymentIntent = await stripe.paymentIntents.create(
@@ -232,13 +222,7 @@ export async function createPaymentIntent(
     };
   } catch (error) {
     console.error("[Stripe] Payment intent creation failed:", error);
-    // Demo fallback
-    return {
-      clientSecret: `pi_demo_secret_${Date.now()}`,
-      paymentIntentId: `pi_demo_${Date.now()}`,
-      amount,
-      status: "succeeded",
-    };
+    throw error; // Fail loudly, don't fallback to demo
   }
 }
 
@@ -258,13 +242,7 @@ export async function createPayout(
 }> {
   try {
     if (!stripeInitialized || !stripe) {
-      // Demo mode
-      return {
-        payoutId: `po_demo_${Date.now()}`,
-        amount,
-        status: "pending",
-        arrivalDate: Math.floor(Date.now() / 1000) + 86400 * 2, // 2 days from now
-      };
+      throw new Error("Stripe not initialized. Cannot process real withdrawals.");
     }
 
     const payout = await stripe.payouts.create(

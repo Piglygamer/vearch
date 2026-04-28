@@ -113,11 +113,13 @@ export default function Dashboard() {
   };
 
   const handleDeposit = async () => {
+    console.log("[DEBUG] Deposit button clicked", { depositAmount, bankAccount });
     if (!depositAmount || !bankAccount) {
       setError("Please enter amount and create bank account first");
       return;
     }
 
+    console.log("[DEBUG] Processing deposit...");
     setIsProcessing(true);
     try {
       const res = await fetch("/api/bank/deposit", {
@@ -131,10 +133,12 @@ export default function Dashboard() {
       const data = await res.json();
       
       if (data.success) {
+        console.log("[DEBUG] Deposit successful");
         setShowDepositModal(false);
         setDepositAmount("");
         fetchDashboardData();
       } else {
+        console.error("[DEBUG] Deposit failed:", data.error);
         setError(data.error || "Deposit failed");
       }
     } catch (error) {

@@ -2,13 +2,15 @@ import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
 
-const queryClient = new QueryClient();
+const stripePromise = loadStripe("pk_live_51McGJ42nZsNbWnNOTdELhtgZHR3e6sSB0IKGb5G5xUN9EoeXboOSyRUfrbwfQSFAgBGeaPS2adh3MQEy1AoQu8lD00VBaGZm4g");
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
@@ -55,7 +57,9 @@ const trpcClient = trpc.createClient({
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>
     <QueryClientProvider client={queryClient}>
-      <App />
+      <Elements stripe={stripePromise}>
+        <App />
+      </Elements>
     </QueryClientProvider>
   </trpc.Provider>
 );

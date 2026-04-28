@@ -107,10 +107,10 @@ router.get("/balance", async (req: Request, res: Response) => {
 router.post("/deposit", async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || 1;
-    const { amount, paymentMethodId } = req.body;
+    const { amount } = req.body;
 
-    if (!amount || !paymentMethodId) {
-      return res.status(400).json({ error: "Missing required fields: amount, paymentMethodId" });
+    if (!amount) {
+      return res.status(400).json({ error: "Missing required field: amount" });
     }
 
     const account = await getUserBankAccount(userId);
@@ -118,15 +118,23 @@ router.post("/deposit", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Bank account not found. Create one first." });
     }
 
-    const result = await createPaymentIntent(account.stripeAccountId, amount);
-
-    res.json({
-      success: true,
-      transactionId: result.paymentIntentId,
-      status: result.status,
-      amount: result.amount,
-      message: `Deposit of $${amount} initiated. Status: ${result.status}`,
-    });
+    try {
+      const result = await createPaymentIntent(account.stripeAccountId, amount);
+      res.json({
+        success: true,
+        transactionId: result.paymentIntentId,
+        status: result.status,
+        amount: result.amount,
+        message: `Deposit of $${amount} initiated. Status: ${result.status}`,
+      });
+    } catch (stripeError) {
+      console.error("[Bank API] Stripe error during deposit:", stripeError);
+      // Return more detailed error
+      res.status(500).json({ 
+        error: "Failed to process deposit",
+        details: (stripeError as any).message || "Unknown Stripe error"
+      });
+    }
   } catch (error) {
     console.error("[Bank API] Failed to process deposit:", error);
     res.status(500).json({ error: "Failed to process deposit" });

@@ -72,6 +72,12 @@ export async function getUserBankAccount(userId: number): Promise<any> {
       return null;
     }
 
+    // Skip demo accounts - they don't work with real Stripe
+    if (account[0].stripeAccountId.startsWith("acct_demo")) {
+      console.log(`[Bank] Skipping demo account ${account[0].stripeAccountId}, creating real one`);
+      return null; // Will trigger creation of a real account
+    }
+
     const stripeDetails = await getAccountDetails(account[0].stripeAccountId);
     const balance = await getAccountBalance(account[0].stripeAccountId);
 
