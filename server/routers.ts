@@ -3,6 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
+import { cryptoRouter } from "./routers/cryptoRouter";
 import {
   getWalletsByUserId,
   getTransactionsByUserId,
@@ -326,6 +327,8 @@ const cardRouter = router({
 // ============================================================================
 // MAIN APP ROUTER
 // ============================================================================
+
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -339,6 +342,7 @@ export const appRouter = router({
   bank: bankRouter,
   implant: implantRouter,
   card: cardRouter,
+  crypto: cryptoRouter,
 });
 
 export type AppRouter = typeof appRouter;
