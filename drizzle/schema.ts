@@ -37,7 +37,7 @@ export const implants = mysqlTable("implants", {
   nxtpayTokenId: varchar("nxtpayTokenId", { length: 256 }), // Reference to NxtPay backend token
   status: mysqlEnum("status", ["active", "expiring", "expired", "revoked"]).default("active").notNull(),
   linkedAt: timestamp("linkedAt").defaultNow().notNull(),
-  expiresAt: timestamp("expiresAt"), // When the NxtPay token expires (2028)
+  expiresAt: timestamp("expiresAt"), // When the implant expires (year 30000 = never)
   lastSyncedAt: timestamp("lastSyncedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -77,8 +77,8 @@ export const cards = mysqlTable("cards", {
   implantId: int("implantId"), // Optional: linked to specific implant
   cardNumber: varchar("cardNumber", { length: 256 }).notNull(), // Encrypted PAN
   cardToken: varchar("cardToken", { length: 512 }).notNull(), // Tokenized representation
-  expiryMonth: int("expiryMonth").notNull(), // 1-12
-  expiryYear: int("expiryYear").notNull(), // e.g., 30979
+  expiryMonth: int("expiryMonth").notNull(), // 1-12 (always 12 for immortal cards)
+  expiryYear: int("expiryYear").notNull(), // Always 30000 for immortal cards
   cvv: varchar("cvv", { length: 256 }), // Encrypted CVV
   cardholderName: varchar("cardholderName", { length: 256 }),
   status: mysqlEnum("status", ["active", "suspended", "expired", "revoked"]).default("active").notNull(),
