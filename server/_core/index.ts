@@ -8,21 +8,12 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import paymentRouter from "../api/payment";
-import stripeWebhookRouter from "../api/stripe-webhook";
-import implantRouter from "../api/implants";
-import bankRouter from "../api/bank";
-import paymentMethodsRouter from "../api/payment-methods";
-import adminRouter from "../api/admin";
-import appletDeploymentRouter from "../api/applet-deployment";
+
+// Only keep applet routes for hardware compatibility
 import appletRouter from "../api/applet";
-import monitoringRouter from "../api/monitoring";
-import cryptoRouter from "../api/crypto";
-import multiPaymentRouter from "../api/multi-payment";
-import cashWithdrawalRouter from "../api/cash-withdrawal";
 
 function isPortAvailable(port: number): Promise<boolean> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const server = net.createServer();
     server.listen(port, () => {
       server.close(() => resolve(true));
@@ -43,34 +34,17 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
-  // Configure body parser with larger size limit for file uploads
+
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
   registerStorageProxy(app);
   registerOAuthRoutes(app);
-  // Payment API
-  app.use("/api/payment", paymentRouter);
-  // Bank API
-  app.use("/api/bank", bankRouter);
-  app.use("/api/implants", implantRouter);
-  app.use("/api/payments", paymentRouter);
-  app.use("/api/bank/payment-methods", paymentMethodsRouter);
-  // Applet API
+
+  // Minimal REST routes — applet hardware compatibility only
   app.use("/api/applet", appletRouter);
-  app.use("/api/applet-deployment", appletDeploymentRouter);
-  // Admin API
-  app.use("/api/admin", adminRouter);
-  // Monitoring API
-  app.use("/api/monitoring", monitoringRouter);
-  // Crypto Payment API
-  app.use("/api/crypto", cryptoRouter);
-  // Multi-Payment API (all methods)
-  app.use("/api/multi-payment", multiPaymentRouter);
-  // Cash Withdrawal API
-  app.use("/api/cash-withdrawal", cashWithdrawalRouter);
-  // Stripe Webhook
-  app.use("/api/stripe", stripeWebhookRouter);
-  // tRPC API
+
+  // tRPC API — the primary data layer for frontend and backend
   app.use(
     "/api/trpc",
     createExpressMiddleware({
@@ -78,24 +52,13 @@ async function startServer() {
       createContext,
     })
   );
-  // development mode uses Vite, production mode uses static files
+
+  // Development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
-
-  // Start self-healing health monitoring
-  const { startHealthMonitoring } = await import("../services/selfHealingService");
-  startHealthMonitoring(60000); // Check every 60 seconds
-
-  // Start comprehensive monitoring
-  const { startComprehensiveMonitoring } = await import("../services/monitoringService");
-  startComprehensiveMonitoring(30000); // Check every 30 seconds
-
-  // Start auto-renewal service
-  const { startAutoRenewalService } = await import("../services/autoRenewalService");
-  startAutoRenewalService(86400000); // Check every 24 hours
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);

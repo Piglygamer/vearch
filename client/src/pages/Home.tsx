@@ -1,101 +1,90 @@
-import React, { useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Zap, Shield, TrendingUp, Smartphone, Lock, Gauge } from "lucide-react";
 import { getLoginUrl } from "@/const";
+import {
+  ArrowRight,
+  Bitcoin,
+  CreditCard,
+  Cpu,
+  Shield,
+  Zap,
+  Globe,
+} from "lucide-react";
+import React, { useEffect } from "react";
 import { useLocation } from "wouter";
 
 export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
-  const [, navigate] = useLocation();
+  const [, setLocation] = useLocation();
 
-  // Redirect authenticated users to dashboard using useEffect to avoid render-time state updates
-  React.useEffect(() => {
-    if (isAuthenticated && !loading) {
-      navigate("/dashboard");
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!loading && isAuthenticated) {
+      setLocation("/dashboard");
     }
-  }, [isAuthenticated, loading, navigate]);
+  }, [loading, isAuthenticated, setLocation]);
 
-  const features = [
-    {
-      icon: Zap,
-      title: "Instant Payments",
-      description: "Tap your implant to pay instantly. No cards, no delays.",
-    },
-    {
-      icon: Shield,
-      title: "Military-Grade Security",
-      description: "End-to-end encryption and biometric authentication for every transaction.",
-    },
-    {
-      icon: TrendingUp,
-      title: "Real-Time Balance",
-      description: "Track your balance and transactions in real-time across all devices.",
-    },
-    {
-      icon: Smartphone,
-      title: "Mobile First",
-      description: "Manage your account from anywhere with our native mobile app.",
-    },
-    {
-      icon: Lock,
-      title: "Privacy Protected",
-      description: "Your financial data is encrypted and never shared with third parties.",
-    },
-    {
-      icon: Gauge,
-      title: "Always On",
-      description: "24/7 uptime with automatic renewal and self-healing infrastructure.",
-    },
-  ];
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-black/40 backdrop-blur-md border-b border-blue-500/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Nav */}
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Zap className="w-8 h-8 text-blue-400" />
-            <span className="text-xl font-bold text-white">Vearch Bank</span>
+            <Zap className="h-6 w-6 text-primary" />
+            <span className="font-bold text-lg tracking-tight">VEARCH BANK</span>
           </div>
           <Button
             onClick={() => (window.location.href = getLoginUrl())}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground"
           >
-            Sign In
+            Sign in
+            <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
+      {/* Hero */}
+      <section className="pt-32 pb-20 px-4">
         <div className="max-w-4xl mx-auto text-center">
-          <Badge className="mb-4 bg-blue-500/20 text-blue-300 border-blue-500/50">
-            The Future of Banking
-          </Badge>
-          <h1 className="text-5xl sm:text-6xl font-bold text-white mb-6 leading-tight">
-            Banking Reimagined for{" "}
-            <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-              Implant Era
-            </span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary text-sm mb-8">
+            <Cpu className="h-3.5 w-3.5" />
+            Implant-Powered Banking
+          </div>
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-tight mb-6">
+            Your body is your{" "}
+            <span className="text-gradient-magenta">wallet</span>
           </h1>
-          <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-            Tap to pay with your Apex Flex implant. Instant transactions. Military-grade security. Zero friction.
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10">
+            Vearch Bank connects your NFC implant to a full banking platform.
+            Fund your account with crypto, ACH, or wire — then tap to pay
+            anywhere in the world.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
               size="lg"
               onClick={() => (window.location.href = getLoginUrl())}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-8"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground text-base px-8"
             >
               Get Started
+              <ArrowRight className="h-5 w-5 ml-2" />
             </Button>
             <Button
               size="lg"
               variant="outline"
-              className="border-blue-500/50 text-blue-300 hover:bg-blue-500/10"
+              onClick={() => {
+                document
+                  .getElementById("features")
+                  ?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="text-base px-8"
             >
               Learn More
             </Button>
@@ -103,112 +92,127 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features Grid */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-black/20">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-4xl font-bold text-white mb-4 text-center">Why Choose Vearch?</h2>
-          <p className="text-gray-400 text-center mb-12 max-w-2xl mx-auto">
-            The world's first implant-native banking platform designed for speed, security, and simplicity.
-          </p>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature, idx) => {
-              const Icon = feature.icon;
-              return (
-                <Card
-                  key={idx}
-                  className="bg-gradient-to-br from-blue-900/20 to-cyan-900/20 border-blue-500/30 hover:border-blue-500/60 transition-all"
+      {/* Features */}
+      <section id="features" className="py-20 px-4 border-t border-border/30">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-2xl font-bold text-center mb-12">
+            Everything you need for implant payments
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              {
+                icon: Bitcoin,
+                title: "Multi-Rail Funding",
+                desc: "Deposit via BTC, ETH, SOL, USDC, USDT, ACH, or wire transfer. Withdraw to any wallet or bank.",
+                color: "text-primary",
+                bg: "bg-primary/10",
+              },
+              {
+                icon: CreditCard,
+                title: "Virtual EMV Cards",
+                desc: "Auto-issued virtual cards linked to your implant. Never-expiring, always ready for contactless payments.",
+                color: "text-cyan",
+                bg: "bg-cyan/10",
+              },
+              {
+                icon: Shield,
+                title: "Implant Security",
+                desc: "Your NFC implant is your authentication. No passwords, no PINs — just tap your hand to authorize.",
+                color: "text-neon-green",
+                bg: "bg-neon-green/10",
+              },
+            ].map((f) => (
+              <div
+                key={f.title}
+                className="rounded-xl border border-border bg-card p-6 hover:border-primary/20 transition-colors"
+              >
+                <div
+                  className={`h-12 w-12 rounded-xl ${f.bg} flex items-center justify-center mb-4`}
                 >
-                  <CardHeader>
-                    <Icon className="w-8 h-8 text-blue-400 mb-2" />
-                    <CardTitle className="text-white">{feature.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <CardDescription className="text-gray-300">{feature.description}</CardDescription>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                  <f.icon className={`h-6 w-6 ${f.color}`} />
+                </div>
+                <h3 className="font-semibold text-foreground mb-2">{f.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {f.desc}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid md:grid-cols-3 gap-8 text-center">
-            <div>
-              <div className="text-4xl font-bold text-blue-400 mb-2">50K+</div>
-              <p className="text-gray-400">Active Users</p>
-            </div>
-            <div>
-              <div className="text-4xl font-bold text-blue-400 mb-2">$2.5B+</div>
-              <p className="text-gray-400">Transactions Processed</p>
-            </div>
-            <div>
-              <div className="text-4xl font-bold text-blue-400 mb-2">99.99%</div>
-              <p className="text-gray-400">Uptime Guarantee</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-blue-600/20 to-cyan-600/20 border-y border-blue-500/20">
+      {/* Payment methods */}
+      <section className="py-20 px-4 border-t border-border/30">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl font-bold text-white mb-6">Ready to Join the Future?</h2>
-          <p className="text-xl text-gray-300 mb-8">
+          <h2 className="text-2xl font-bold mb-4">Supported Payment Rails</h2>
+          <p className="text-muted-foreground mb-10">
+            Fund your account through multiple channels
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { name: "Bitcoin", sub: "BTC" },
+              { name: "Ethereum", sub: "ETH" },
+              { name: "Solana", sub: "SOL" },
+              { name: "Stablecoins", sub: "USDC / USDT" },
+            ].map((c) => (
+              <div
+                key={c.name}
+                className="rounded-xl border border-border bg-card p-4 text-center"
+              >
+                <p className="font-semibold text-foreground text-sm">{c.name}</p>
+                <p className="text-xs text-muted-foreground mt-1">{c.sub}</p>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-3">
+              <Globe className="h-5 w-5 text-cyan shrink-0" />
+              <div className="text-left">
+                <p className="font-semibold text-foreground text-sm">ACH Transfer</p>
+                <p className="text-xs text-muted-foreground">
+                  2-3 business days, US bank accounts
+                </p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-3">
+              <Globe className="h-5 w-5 text-neon-green shrink-0" />
+              <div className="text-left">
+                <p className="font-semibold text-foreground text-sm">Wire Transfer</p>
+                <p className="text-xs text-muted-foreground">
+                  Same day, domestic and international
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="py-20 px-4 border-t border-border/30 bg-primary/5">
+        <div className="max-w-3xl mx-auto text-center">
+          <h2 className="text-3xl font-bold mb-4">Ready to Join the Future?</h2>
+          <p className="text-muted-foreground mb-8">
             Create your account in seconds and start using your implant for payments today.
           </p>
           <Button
             size="lg"
             onClick={() => (window.location.href = getLoginUrl())}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground text-base px-8"
           >
             Sign Up Now
+            <ArrowRight className="h-5 w-5 ml-2" />
           </Button>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-black/40 border-t border-blue-500/20 py-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid md:grid-cols-4 gap-8 mb-8">
-            <div>
-              <h3 className="text-white font-bold mb-4">Product</h3>
-              <ul className="space-y-2 text-gray-400 text-sm">
-                <li><a href="#" className="hover:text-blue-400">Features</a></li>
-                <li><a href="#" className="hover:text-blue-400">Security</a></li>
-                <li><a href="#" className="hover:text-blue-400">Pricing</a></li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-white font-bold mb-4">Company</h3>
-              <ul className="space-y-2 text-gray-400 text-sm">
-                <li><a href="#" className="hover:text-blue-400">About</a></li>
-                <li><a href="#" className="hover:text-blue-400">Blog</a></li>
-                <li><a href="#" className="hover:text-blue-400">Careers</a></li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-white font-bold mb-4">Legal</h3>
-              <ul className="space-y-2 text-gray-400 text-sm">
-                <li><a href="#" className="hover:text-blue-400">Privacy</a></li>
-                <li><a href="#" className="hover:text-blue-400">Terms</a></li>
-                <li><a href="#" className="hover:text-blue-400">Contact</a></li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-white font-bold mb-4">Social</h3>
-              <ul className="space-y-2 text-gray-400 text-sm">
-                <li><a href="#" className="hover:text-blue-400">Twitter</a></li>
-                <li><a href="#" className="hover:text-blue-400">Discord</a></li>
-                <li><a href="#" className="hover:text-blue-400">GitHub</a></li>
-              </ul>
-            </div>
+      <footer className="border-t border-border/30 py-8 px-4">
+        <div className="max-w-5xl mx-auto flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <Zap className="h-4 w-4 text-primary" />
+            <span>Vearch Bank</span>
           </div>
-          <div className="border-t border-blue-500/20 pt-8 text-center text-gray-400 text-sm">
-            <p>&copy; 2026 Vearch Bank. All rights reserved. Immortal banking for the implant era.</p>
-          </div>
+          <span>Implant-powered finance</span>
         </div>
       </footer>
     </div>

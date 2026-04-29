@@ -1,595 +1,848 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertCircle, Zap, CreditCard, Wallet, TrendingUp, RefreshCw, Plus, Send, Download } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import { getLoginUrl } from "@/const";
+import { useIsMobile } from "@/hooks/useMobile";
+import { trpc } from "@/lib/trpc";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  CreditCard,
+  Cpu,
+  LayoutDashboard,
+  LogOut,
+  PanelLeft,
+  TrendingUp,
+  Wallet,
+  Zap,
+} from "lucide-react";
+import { CSSProperties, useEffect, useRef, useState } from "react";
+import { useLocation, useParams } from "wouter";
+import { DashboardLayoutSkeleton } from "@/components/DashboardLayoutSkeleton";
 import { DepositModal } from "@/components/DepositModal";
 import { WithdrawalModal } from "@/components/WithdrawalModal";
-import { ImplantLinkingWizard } from "@/components/ImplantLinkingWizard";
+import { toast } from "sonner";
 
+// ============================================================================
+// Sidebar menu
+// ============================================================================
+const menuItems = [
+  { icon: LayoutDashboard, label: "Overview", path: "/dashboard" },
+  { icon: Cpu, label: "Implants", path: "/dashboard/implants" },
+  { icon: CreditCard, label: "Cards", path: "/dashboard/cards" },
+  { icon: Wallet, label: "Wallets", path: "/dashboard/wallets" },
+  { icon: TrendingUp, label: "Transactions", path: "/dashboard/transactions" },
+];
+
+const SIDEBAR_WIDTH_KEY = "vearch-sidebar-width";
+const DEFAULT_WIDTH = 260;
+const MIN_WIDTH = 200;
+const MAX_WIDTH = 400;
+
+// ============================================================================
+// Main Dashboard Page
+// ============================================================================
 export default function Dashboard() {
-  const [implants, setImplants] = useState<any[]>([]);
-  const [cards, setCards] = useState<any[]>([]);
-  const [wallets, setWallets] = useState<any[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [bankAccount, setBankAccount] = useState<any>(null);
-  const [balance, setBalance] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Modal states
-  const [showBankModal, setShowBankModal] = useState(false);
-  const [showDepositModal, setShowDepositModal] = useState(false);
-  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-  const [showImplantWizard, setShowImplantWizard] = useState(false);
-  
-  // Form states
-  const [bankEmail, setBankEmail] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [depositAmount, setDepositAmount] = useState("");
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
+  const { loading, user } = useAuth();
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+    return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
+  });
 
   useEffect(() => {
-    fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 5000); // Auto-refresh every 5 seconds
-    return () => clearInterval(interval);
-  }, []);
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
+  }, [sidebarWidth]);
 
-  const fetchDashboardData = async () => {
-    try {
-      setError(null);
+  if (loading) return <DashboardLayoutSkeleton />;
 
-      const [implantsRes, cardsRes, walletsRes, transactionsRes, bankRes, balanceRes] = await Promise.all([
-        fetch("/api/payment/implants"),
-        fetch("/api/payment/cards"),
-        fetch("/api/payment/wallets"),
-        fetch("/api/payment/transactions"),
-        fetch("/api/bank/account"),
-        fetch("/api/bank/balance"),
-      ]);
-
-      const implantsData = await implantsRes.json();
-      const cardsData = await cardsRes.json();
-      const walletsData = await walletsRes.json();
-      const transactionsData = await transactionsRes.json();
-      const bankData = await bankRes.json();
-      const balanceData = await balanceRes.json();
-
-      setImplants(implantsData.implants || []);
-      setCards(cardsData.cards || []);
-      setWallets(walletsData.wallets || []);
-      setTransactions(transactionsData.transactions || []);
-      setBankAccount(bankData.account);
-      setBalance(balanceData.balance || 0);
-      setLoading(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load data");
-      setLoading(false);
-    }
-  };
-
-  const handleCreateBankAccount = async () => {
-    if (!bankEmail || !bankName) {
-      setError("Please enter email and name");
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const res = await fetch("/api/bank/account/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: bankEmail,
-          name: bankName,
-        }),
-      });
-      const data = await res.json();
-      
-      if (data.success && data.onboardingUrl) {
-        // Open Stripe onboarding in a new tab
-        window.open(data.onboardingUrl, "_blank");
-        
-        // Close modal and reset form
-        setShowBankModal(false);
-        setBankEmail("");
-        setBankName("");
-        
-        // Refresh data after a delay
-        setTimeout(() => {
-          fetchDashboardData();
-        }, 2000);
-      } else {
-        setError(data.error || "Failed to create bank account");
-      }
-    } catch (error) {
-      setError("Error creating bank account");
-      console.error(error);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleDeposit = async () => {
-    console.log("[DEBUG] Deposit button clicked", { depositAmount, bankAccount });
-    if (!depositAmount || !bankAccount) {
-      setError("Please enter amount and create bank account first");
-      return;
-    }
-
-    console.log("[DEBUG] Processing deposit...");
-    setIsProcessing(true);
-    try {
-      // Note: Payment method should be captured from DepositModal Stripe Elements
-      // For now, we'll pass null and let backend handle payment method creation
-      const res = await fetch("/api/bank/deposit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: parseFloat(depositAmount),
-          bankAccountId: bankAccount?.stripeAccountId,
-          // Payment method will be handled by Stripe Elements in DepositModal
-        }),
-      });
-      const data = await res.json();
-      
-      if (data.success) {
-        console.log("[DEBUG] Deposit successful");
-        setShowDepositModal(false);
-        setDepositAmount("");
-        // Refresh data after deposit
-        setTimeout(() => fetchDashboardData(), 1000);
-      } else {
-        console.error("[DEBUG] Deposit failed:", data.error);
-        setError(data.error || "Deposit failed");
-      }
-    } catch (error) {
-      setError("Error processing deposit");
-      console.error(error);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleWithdraw = async () => {
-    if (!withdrawAmount || !bankAccount) {
-      setError("Please enter amount and create bank account first");
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const res = await fetch("/api/bank/withdraw", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: parseFloat(withdrawAmount),
-          bankAccountId: bankAccount?.stripeAccountId,
-        }),
-      });
-      const data = await res.json();
-      
-      if (data.success) {
-        setShowWithdrawModal(false);
-        setWithdrawAmount("");
-        fetchDashboardData();
-      } else {
-        setError(data.error || "Withdrawal failed");
-      }
-    } catch (error) {
-      setError("Error processing withdrawal");
-      console.error(error);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-cyan-500/20 text-cyan-400 border-cyan-500/50";
-      case "expiring":
-        return "bg-orange-500/20 text-orange-400 border-orange-500/50";
-      case "expired":
-        return "bg-red-500/20 text-red-400 border-red-500/50";
-      default:
-        return "bg-gray-500/20 text-gray-400 border-gray-500/50";
-    }
-  };
-
-  if (loading) {
+  if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="text-center">
-          <Zap className="w-12 h-12 text-magenta-500 mx-auto mb-4 animate-pulse" />
-          <p className="text-foreground">Initializing Vearch Bank...</p>
+        <div className="flex flex-col items-center gap-6 p-8 max-w-md w-full">
+          <Zap className="h-12 w-12 text-magenta" />
+          <h1 className="text-2xl font-bold text-foreground">Sign in to continue</h1>
+          <p className="text-muted-foreground text-center text-sm">
+            Access your Vearch Bank dashboard to manage implants, cards, and payments.
+          </p>
+          <Button
+            onClick={() => (window.location.href = getLoginUrl())}
+            size="lg"
+            className="w-full bg-magenta hover:bg-magenta-dark text-white"
+          >
+            Sign in
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Zap className="w-8 h-8 text-magenta-500" />
-              <div>
-                <h1 className="text-3xl font-bold text-foreground">VEARCH BANK</h1>
-                <p className="text-sm text-muted-foreground">Immortal Implant Payment OS</p>
-              </div>
+    <SidebarProvider
+      style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+    >
+      <DashboardContent setSidebarWidth={setSidebarWidth} />
+    </SidebarProvider>
+  );
+}
+
+// ============================================================================
+// Dashboard Content (inside SidebarProvider)
+// ============================================================================
+function DashboardContent({
+  setSidebarWidth,
+}: {
+  setSidebarWidth: (w: number) => void;
+}) {
+  const { user, logout } = useAuth();
+  const [location, setLocation] = useLocation();
+  const { state, toggleSidebar } = useSidebar();
+  const isCollapsed = state === "collapsed";
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
+  const params = useParams<{ tab?: string }>();
+  const activeTab = params?.tab || "overview";
+
+  // Modal state
+  const [showDeposit, setShowDeposit] = useState(false);
+  const [showWithdraw, setShowWithdraw] = useState(false);
+
+  // tRPC data
+  const walletQuery = trpc.bank.getWallet.useQuery(undefined, {
+    retry: 1,
+    refetchInterval: 15000,
+  });
+  const txQuery = trpc.bank.getTransactions.useQuery(undefined, {
+    retry: 1,
+    refetchInterval: 15000,
+  });
+  const implantsQuery = trpc.implant.list.useQuery(undefined, { retry: 1 });
+  const cardsQuery = trpc.card.list.useQuery(undefined, { retry: 1 });
+
+  const balance = walletQuery.data?.balance ?? 0;
+  const txns = txQuery.data ?? [];
+  const implantsList = implantsQuery.data ?? [];
+  const cardsList = cardsQuery.data ?? [];
+
+  const activeMenuItem = menuItems.find((item) => item.path === location);
+
+  // Resize logic
+  useEffect(() => {
+    if (isCollapsed) setIsResizing(false);
+  }, [isCollapsed]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      const left = sidebarRef.current?.getBoundingClientRect().left ?? 0;
+      const newWidth = e.clientX - left;
+      if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) setSidebarWidth(newWidth);
+    };
+    const handleMouseUp = () => setIsResizing(false);
+    if (isResizing) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    }
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizing, setSidebarWidth]);
+
+  return (
+    <>
+      {/* Sidebar */}
+      <div className="relative" ref={sidebarRef}>
+        <Sidebar collapsible="icon" className="border-r-0" disableTransition={isResizing}>
+          <SidebarHeader className="h-16 justify-center">
+            <div className="flex items-center gap-3 px-2 w-full">
+              <button
+                onClick={toggleSidebar}
+                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors shrink-0"
+                aria-label="Toggle navigation"
+              >
+                <PanelLeft className="h-4 w-4 text-muted-foreground" />
+              </button>
+              {!isCollapsed && (
+                <div className="flex items-center gap-2 min-w-0">
+                  <Zap className="h-5 w-5 text-magenta shrink-0" />
+                  <span className="font-bold tracking-tight truncate text-sm">
+                    VEARCH BANK
+                  </span>
+                </div>
+              )}
             </div>
-            <Button
-              onClick={fetchDashboardData}
-              variant="outline"
-              className="border-magenta-500/50 hover:bg-magenta-500/10"
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh
-            </Button>
-          </div>
-        </div>
+          </SidebarHeader>
+
+          <SidebarContent className="gap-0">
+            <SidebarMenu className="px-2 py-1">
+              {menuItems.map((item) => {
+                const isActive = location === item.path;
+                return (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={isActive}
+                      onClick={() => setLocation(item.path)}
+                      tooltip={item.label}
+                      className="h-10 transition-all font-normal"
+                    >
+                      <item.icon
+                        className={`h-4 w-4 ${isActive ? "text-magenta" : ""}`}
+                      />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarContent>
+
+          <SidebarFooter className="p-3">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center">
+                  <Avatar className="h-9 w-9 border border-border shrink-0">
+                    <AvatarFallback className="text-xs font-medium bg-magenta/20 text-magenta">
+                      {user?.name?.charAt(0).toUpperCase() ?? "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
+                    <p className="text-sm font-medium truncate leading-none">
+                      {user?.name || "User"}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate mt-1">
+                      {user?.email || ""}
+                    </p>
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={logout}
+                  className="cursor-pointer text-destructive focus:text-destructive"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarFooter>
+        </Sidebar>
+        <div
+          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-magenta/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
+          onMouseDown={() => !isCollapsed && setIsResizing(true)}
+          style={{ zIndex: 50 }}
+        />
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {error && (
-          <Alert className="mb-6 border-red-500/50 bg-red-500/10">
-            <AlertCircle className="h-4 w-4 text-red-400" />
-            <AlertDescription className="text-red-400">{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {!bankAccount && (
-          <Alert className="mb-6 border-orange-500/50 bg-orange-500/10">
-            <AlertCircle className="h-4 w-4 text-orange-400" />
-            <AlertDescription className="text-orange-400">
-              <div className="flex items-center justify-between">
-                <span>Create a bank account to enable deposits and payments</span>
-                <Button
-                  onClick={() => setShowBankModal(true)}
-                  className="ml-4 bg-magenta-600 hover:bg-magenta-700"
-                >
-                  Create Bank Account
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <Card className="border-magenta-500/30 bg-card/50 backdrop-blur-sm hover:border-magenta-500/50 transition-colors">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Active Implants</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-magenta-500">{implants.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">Linked & Active</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-cyan-500/30 bg-card/50 backdrop-blur-sm hover:border-cyan-500/50 transition-colors">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Active Cards</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-cyan-400">{cards.filter((c) => c.status === "active").length}</div>
-              <p className="text-xs text-muted-foreground mt-1">Ready to Use</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-green-500/30 bg-card/50 backdrop-blur-sm hover:border-green-500/50 transition-colors">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Balance</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-green-400">${balance.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground mt-1">Available</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-orange-500/30 bg-card/50 backdrop-blur-sm hover:border-orange-500/50 transition-colors">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Bank Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm font-bold text-orange-400">{bankAccount ? "ACTIVE" : "SETUP NEEDED"}</div>
-              <p className="text-xs text-muted-foreground mt-1">Complete onboarding</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Tabs */}
-        <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="border-b border-border bg-transparent p-0 h-auto">
-            <TabsTrigger
-              value="overview"
-              className="border-b-2 border-transparent data-[state=active]:border-magenta-500 data-[state=active]:bg-transparent rounded-none px-4 py-2"
-            >
-              Overview
-            </TabsTrigger>
-            <TabsTrigger
-              value="implants"
-              className="border-b-2 border-transparent data-[state=active]:border-magenta-500 data-[state=active]:bg-transparent rounded-none px-4 py-2"
-            >
-              <Zap className="w-4 h-4 mr-2" />
-              Implants
-            </TabsTrigger>
-            <TabsTrigger
-              value="cards"
-              className="border-b-2 border-transparent data-[state=active]:border-magenta-500 data-[state=active]:bg-transparent rounded-none px-4 py-2"
-            >
-              <CreditCard className="w-4 h-4 mr-2" />
-              Cards
-            </TabsTrigger>
-            <TabsTrigger
-              value="wallets"
-              className="border-b-2 border-transparent data-[state=active]:border-magenta-500 data-[state=active]:bg-transparent rounded-none px-4 py-2"
-            >
-              <Wallet className="w-4 h-4 mr-2" />
-              Wallets
-            </TabsTrigger>
-            <TabsTrigger
-              value="transactions"
-              className="border-b-2 border-transparent data-[state=active]:border-magenta-500 data-[state=active]:bg-transparent rounded-none px-4 py-2"
-            >
-              <TrendingUp className="w-4 h-4 mr-2" />
-              Transactions
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="border-magenta-500/30 bg-card/50 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-magenta-400">
-                    <Plus className="w-5 h-5" />
-                    Quick Deposit
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-gray-400">Add money to your Vearch Bank account</p>
-                  <Button
-                    onClick={() => setShowDepositModal(true)}
-                    disabled={!bankAccount}
-                    className="w-full bg-magenta-600 hover:bg-magenta-700"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Deposit Now
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card className="border-cyan-500/30 bg-card/50 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-cyan-400">
-                    <Send className="w-5 h-5" />
-                    Quick Withdraw
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-gray-400">Withdraw money to your bank account</p>
-                  <Button
-                    onClick={() => setShowWithdrawModal(true)}
-                    disabled={!bankAccount}
-                    className="w-full bg-cyan-600 hover:bg-cyan-700"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Withdraw
-                  </Button>
-                </CardContent>
-              </Card>
+      {/* Main content */}
+      <SidebarInset>
+        {isMobile && (
+          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-3 backdrop-blur sticky top-0 z-40">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger className="h-9 w-9 rounded-lg" />
+              <span className="font-medium text-sm">
+                {activeMenuItem?.label ?? "Dashboard"}
+              </span>
             </div>
-          </TabsContent>
-
-          {/* Implants Tab */}
-          <TabsContent value="implants" className="space-y-4">
-            {implants.length === 0 ? (
-              <Card className="border-magenta-500/30 bg-card/50 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle>Link Your First Implant</CardTitle>
-                  <CardDescription>Connect your Apex Flex implant to enable tap-to-pay transactions</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">Your implant will be linked to your Vearch Bank wallet, allowing you to make payments by tapping your implant on NFC readers.</p>
-                  <Button
-                    onClick={() => setShowImplantWizard(true)}
-                    className="w-full bg-magenta-600 hover:bg-magenta-700"
-                  >
-                    <Zap className="w-4 h-4 mr-2" />
-                    Link Implant
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                {implants.map((implant) => (
-                  <Card key={implant.id} className="border-magenta-500/30 bg-card/50 backdrop-blur-sm">
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle>{implant.implantType}</CardTitle>
-                          <CardDescription className="font-mono text-xs mt-1">{implant.implantId}</CardDescription>
-                        </div>
-                        <Badge className={getStatusColor(implant.status)}>{implant.status.toUpperCase()}</Badge>
-                      </div>
-                    </CardHeader>
-                  </Card>
-                ))}
-                <Button
-                  onClick={() => setShowImplantWizard(true)}
-                  variant="outline"
-                  className="w-full border-magenta-500/50 hover:bg-magenta-500/10"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Link Another Implant
-                </Button>
-              </>
-            )}
-          </TabsContent>
-
-          {/* Cards Tab */}
-          <TabsContent value="cards" className="space-y-4">
-            {cards.length === 0 ? (
-              <Card className="border-border/50 bg-card/50">
-                <CardContent className="pt-6 text-center">
-                  <p className="text-muted-foreground">No cards issued yet. Create a card to start spending.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              cards.map((card) => (
-                <Card key={card.id} className="border-cyan-500/30 bg-card/50 backdrop-blur-sm">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle>{card.cardholderName}</CardTitle>
-                        <CardDescription>•••• •••• •••• {card.cardNumber?.slice(-4)}</CardDescription>
-                        <p className="text-xs text-muted-foreground mt-1">Expires: {card.expiryMonth}/{card.expiryYear}</p>
-                      </div>
-                      <Badge className={getStatusColor(card.status)}>{card.status.toUpperCase()}</Badge>
-                    </div>
-                  </CardHeader>
-                </Card>
-              ))
-            )}
-          </TabsContent>
-
-          {/* Wallets Tab */}
-          <TabsContent value="wallets" className="space-y-4">
-            {wallets.length === 0 ? (
-              <Card className="border-border/50 bg-card/50">
-                <CardContent className="pt-6 text-center">
-                  <p className="text-muted-foreground">No wallets linked yet. Add a funding source to get started.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              wallets.map((wallet) => (
-                <Card key={wallet.id} className="border-green-500/30 bg-card/50 backdrop-blur-sm">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle>{wallet.walletType}</CardTitle>
-                        <CardDescription>Balance: ${wallet.balance}</CardDescription>
-                      </div>
-                      <Badge className={getStatusColor(wallet.status)}>{wallet.status.toUpperCase()}</Badge>
-                    </div>
-                  </CardHeader>
-                </Card>
-              ))
-            )}
-          </TabsContent>
-
-          {/* Transactions Tab */}
-          <TabsContent value="transactions" className="space-y-4">
-            {transactions.length === 0 ? (
-              <Card className="border-border/50 bg-card/50">
-                <CardContent className="pt-6 text-center">
-                  <p className="text-muted-foreground">No transactions yet. Make your first payment to see history.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              transactions.map((txn) => (
-                <Card key={txn.id} className="border-border/50 bg-card/50 backdrop-blur-sm">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle className="text-base">{txn.merchantName}</CardTitle>
-                        <CardDescription>{txn.description}</CardDescription>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold">${txn.amount}</p>
-                        <Badge className={getStatusColor(txn.status)}>{txn.status.toUpperCase()}</Badge>
-                      </div>
-                    </div>
-                  </CardHeader>
-                </Card>
-              ))
-            )}
-          </TabsContent>
-        </Tabs>
-      </div>
-
-      {/* Bank Account Modal */}
-      <Dialog open={showBankModal} onOpenChange={setShowBankModal}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Create Bank Account</DialogTitle>
-            <DialogDescription>
-              Set up your Vearch Bank account with Stripe. You'll be redirected to complete onboarding.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="bank-email">Email</Label>
-              <Input
-                id="bank-email"
-                type="email"
-                placeholder="your@email.com"
-                value={bankEmail}
-                onChange={(e) => setBankEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="bank-name">Full Name</Label>
-              <Input
-                id="bank-name"
-                type="text"
-                placeholder="John Doe"
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
-              />
-            </div>
-            <Button
-              onClick={handleCreateBankAccount}
-              disabled={isProcessing || !bankEmail || !bankName}
-              className="w-full bg-magenta-600 hover:bg-magenta-700"
-            >
-              {isProcessing ? "Creating..." : "Create & Continue to Stripe"}
-            </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        )}
 
-      {/* Deposit Modal */}
+        <main className="flex-1 p-4 md:p-6 space-y-6">
+          {activeTab === "overview" && (
+            <OverviewTab
+              balance={balance}
+              implantCount={implantsList.length}
+              cardCount={cardsList.filter((c) => c.status === "active").length}
+              recentTxns={txns.slice(0, 5)}
+              onDeposit={() => setShowDeposit(true)}
+              onWithdraw={() => setShowWithdraw(true)}
+              isLoading={walletQuery.isLoading}
+            />
+          )}
+          {activeTab === "implants" && <ImplantsTab implants={implantsList} isLoading={implantsQuery.isLoading} />}
+          {activeTab === "cards" && <CardsTab cards={cardsList} isLoading={cardsQuery.isLoading} />}
+          {activeTab === "wallets" && <WalletsTab balance={balance} currency={walletQuery.data?.currency ?? "USD"} status={walletQuery.data?.status ?? "active"} isLoading={walletQuery.isLoading} />}
+          {activeTab === "transactions" && <TransactionsTab transactions={txns} isLoading={txQuery.isLoading} />}
+        </main>
+      </SidebarInset>
+
+      {/* Modals */}
       <DepositModal
-        open={showDepositModal}
-        onOpenChange={setShowDepositModal}
+        open={showDeposit}
+        onOpenChange={setShowDeposit}
         onSuccess={() => {
-          setDepositAmount("");
-          fetchDashboardData();
+          walletQuery.refetch();
+          txQuery.refetch();
+          toast.success("Deposit initiated successfully");
         }}
-        bankAccountId={bankAccount?.stripeAccountId}
       />
-
-      {/* Withdrawal Modal */}
       <WithdrawalModal
-        open={showWithdrawModal}
-        onOpenChange={setShowWithdrawModal}
+        open={showWithdraw}
+        onOpenChange={setShowWithdraw}
         onSuccess={() => {
-          setWithdrawAmount("");
-          fetchDashboardData();
+          walletQuery.refetch();
+          txQuery.refetch();
+          toast.success("Withdrawal initiated successfully");
         }}
         balance={balance}
       />
+    </>
+  );
+}
 
-      {/* Implant Linking Wizard */}
-      <ImplantLinkingWizard
-        open={showImplantWizard}
-        onOpenChange={setShowImplantWizard}
-        onSuccess={() => {
-          fetchDashboardData();
-        }}
-      />
+// ============================================================================
+// Overview Tab
+// ============================================================================
+function OverviewTab({
+  balance,
+  implantCount,
+  cardCount,
+  recentTxns,
+  onDeposit,
+  onWithdraw,
+  isLoading,
+}: {
+  balance: number;
+  implantCount: number;
+  cardCount: number;
+  recentTxns: any[];
+  onDeposit: () => void;
+  onWithdraw: () => void;
+  isLoading: boolean;
+}) {
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Manage your implant payments, cards, and wallets
+        </p>
+      </div>
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="glow-green border-neon-green/20 bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Balance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="h-9 w-32 bg-muted animate-pulse rounded" />
+            ) : (
+              <div className="text-3xl font-bold text-neon-green font-[JetBrains_Mono]">
+                ${balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">Available USD</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-magenta/20 bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Implants
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-magenta">{implantCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">Linked devices</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-cyan/20 bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Cards
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-cyan">{cardCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">Active cards</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Transactions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-foreground">{recentTxns.length > 0 ? recentTxns.length : 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">Recent activity</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card
+          className="border-magenta/20 bg-card hover:border-magenta/40 transition-colors cursor-pointer group"
+          onClick={onDeposit}
+        >
+          <CardContent className="p-6 flex items-center gap-4">
+            <div className="h-12 w-12 rounded-xl bg-magenta/10 flex items-center justify-center group-hover:bg-magenta/20 transition-colors">
+              <ArrowDownLeft className="h-6 w-6 text-magenta" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground">Deposit</h3>
+              <p className="text-sm text-muted-foreground">
+                Add funds via crypto, ACH, or wire
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card
+          className="border-cyan/20 bg-card hover:border-cyan/40 transition-colors cursor-pointer group"
+          onClick={onWithdraw}
+        >
+          <CardContent className="p-6 flex items-center gap-4">
+            <div className="h-12 w-12 rounded-xl bg-cyan/10 flex items-center justify-center group-hover:bg-cyan/20 transition-colors">
+              <ArrowUpRight className="h-6 w-6 text-cyan" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground">Withdraw</h3>
+              <p className="text-sm text-muted-foreground">
+                Send to crypto wallet, bank, or wire
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent transactions */}
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">Recent Transactions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {recentTxns.length === 0 ? (
+            <div className="text-center py-8">
+              <TrendingUp className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">
+                No transactions yet. Make your first deposit to get started.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {recentTxns.map((txn) => (
+                <div
+                  key={txn.id}
+                  className="flex items-center justify-between py-2 border-b border-border/50 last:border-0"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`h-8 w-8 rounded-lg flex items-center justify-center ${
+                        txn.type === "topup"
+                          ? "bg-neon-green/10 text-neon-green"
+                          : "bg-neon-red/10 text-neon-red"
+                      }`}
+                    >
+                      {txn.type === "topup" ? (
+                        <ArrowDownLeft className="h-4 w-4" />
+                      ) : (
+                        <ArrowUpRight className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">
+                        {txn.type === "topup" ? "Deposit" : "Withdrawal"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {txn.description?.slice(0, 40) || "Transaction"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p
+                      className={`text-sm font-semibold font-[JetBrains_Mono] ${
+                        txn.type === "topup" ? "text-neon-green" : "text-neon-red"
+                      }`}
+                    >
+                      {txn.type === "topup" ? "+" : "-"}$
+                      {txn.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </p>
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] ${
+                        txn.status === "completed"
+                          ? "border-neon-green/30 text-neon-green"
+                          : txn.status === "pending"
+                            ? "border-yellow-500/30 text-yellow-500"
+                            : "border-neon-red/30 text-neon-red"
+                      }`}
+                    >
+                      {txn.status}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================================
+// Implants Tab
+// ============================================================================
+function ImplantsTab({ implants, isLoading }: { implants: any[]; isLoading: boolean }) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Implants</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Manage your NFC payment implants
+        </p>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-20 bg-muted animate-pulse rounded-lg" />
+          ))}
+        </div>
+      ) : implants.length === 0 ? (
+        <Card className="border-dashed border-magenta/30 bg-card">
+          <CardContent className="py-12 text-center">
+            <Cpu className="h-12 w-12 text-magenta/30 mx-auto mb-4" />
+            <h3 className="font-semibold text-foreground mb-2">No implants linked</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+              Connect your Apex Flex or NFC implant to enable tap-to-pay transactions.
+              Hold your implant near your device to begin.
+            </p>
+            <Button
+              className="mt-4 bg-magenta hover:bg-magenta-dark text-white"
+              onClick={() => toast.info("NFC scanning requires a compatible device")}
+            >
+              <Zap className="h-4 w-4 mr-2" />
+              Link Implant
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {implants.map((implant) => (
+            <Card key={implant.id} className="border-magenta/20 bg-card">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-magenta/10 flex items-center justify-center">
+                    <Cpu className="h-5 w-5 text-magenta" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">{implant.implantType}</p>
+                    <p className="text-xs text-muted-foreground font-mono">
+                      {implant.implantId}
+                    </p>
+                  </div>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={
+                    implant.status === "active"
+                      ? "border-neon-green/30 text-neon-green"
+                      : "border-yellow-500/30 text-yellow-500"
+                  }
+                >
+                  {implant.status}
+                </Badge>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Cards Tab
+// ============================================================================
+function CardsTab({ cards, isLoading }: { cards: any[]; isLoading: boolean }) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Cards</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Virtual EMV cards linked to your implants
+        </p>
+      </div>
+
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-48 bg-muted animate-pulse rounded-xl" />
+          ))}
+        </div>
+      ) : cards.length === 0 ? (
+        <Card className="border-dashed border-cyan/30 bg-card">
+          <CardContent className="py-12 text-center">
+            <CreditCard className="h-12 w-12 text-cyan/30 mx-auto mb-4" />
+            <h3 className="font-semibold text-foreground mb-2">No cards issued</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+              Virtual cards are automatically issued when you link an implant and fund your wallet.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {cards.map((card) => (
+            <div
+              key={card.id}
+              className="relative rounded-xl p-6 bg-gradient-to-br from-magenta-dark/40 via-card to-cyan-dark/20 border border-magenta/20 overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-magenta/5 rounded-full -translate-y-8 translate-x-8" />
+              <div className="relative z-10">
+                <div className="flex justify-between items-start mb-8">
+                  <Zap className="h-6 w-6 text-magenta" />
+                  <Badge
+                    variant="outline"
+                    className={
+                      card.status === "active"
+                        ? "border-neon-green/30 text-neon-green"
+                        : "border-neon-red/30 text-neon-red"
+                    }
+                  >
+                    {card.status}
+                  </Badge>
+                </div>
+                <p className="text-lg font-mono tracking-[0.2em] text-foreground mb-4">
+                  **** **** **** {card.last4}
+                </p>
+                <div className="flex justify-between items-end">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">
+                      Cardholder
+                    </p>
+                    <p className="text-sm font-medium">{card.cardholderName || "Vearch User"}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-muted-foreground uppercase">
+                      Expires
+                    </p>
+                    <p className="text-sm font-mono">
+                      {String(card.expiryMonth).padStart(2, "0")}/{card.expiryYear}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Wallets Tab
+// ============================================================================
+function WalletsTab({
+  balance,
+  currency,
+  status,
+  isLoading,
+}: {
+  balance: number;
+  currency: string;
+  status: string;
+  isLoading: boolean;
+}) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Wallets</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Your funding sources and balances
+        </p>
+      </div>
+
+      <Card className="glow-green border-neon-green/20 bg-card">
+        <CardContent className="p-6">
+          {isLoading ? (
+            <div className="h-16 w-48 bg-muted animate-pulse rounded" />
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
+                Primary Wallet
+              </p>
+              <div className="text-4xl font-bold text-neon-green font-[JetBrains_Mono] mb-2">
+                ${balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="border-neon-green/30 text-neon-green text-[10px]">
+                  {status}
+                </Badge>
+                <span className="text-xs text-muted-foreground">{currency}</span>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle className="text-base">Payment Methods</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {[
+            { name: "Cryptocurrency", desc: "BTC, ETH, SOL, USDC, USDT", time: "10-30 min", color: "text-magenta" },
+            { name: "ACH Transfer", desc: "US bank account", time: "2-3 business days", color: "text-cyan" },
+            { name: "Wire Transfer", desc: "Domestic / international", time: "Same day", color: "text-neon-green" },
+          ].map((m) => (
+            <div key={m.name} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
+              <div>
+                <p className={`text-sm font-medium ${m.color}`}>{m.name}</p>
+                <p className="text-xs text-muted-foreground">{m.desc}</p>
+              </div>
+              <span className="text-xs text-muted-foreground">{m.time}</span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================================
+// Transactions Tab
+// ============================================================================
+function TransactionsTab({
+  transactions,
+  isLoading,
+}: {
+  transactions: any[];
+  isLoading: boolean;
+}) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Transactions</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Complete history of deposits, withdrawals, and payments
+        </p>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
+          ))}
+        </div>
+      ) : transactions.length === 0 ? (
+        <Card className="border-dashed border-border bg-card">
+          <CardContent className="py-12 text-center">
+            <TrendingUp className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+            <h3 className="font-semibold text-foreground mb-2">No transactions</h3>
+            <p className="text-sm text-muted-foreground">
+              Your transaction history will appear here once you make a deposit or payment.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-border bg-card">
+          <CardContent className="p-0">
+            <div className="divide-y divide-border/50">
+              {transactions.map((txn) => (
+                <div key={txn.id} className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`h-9 w-9 rounded-lg flex items-center justify-center ${
+                        txn.type === "topup"
+                          ? "bg-neon-green/10 text-neon-green"
+                          : txn.type === "transfer"
+                            ? "bg-neon-red/10 text-neon-red"
+                            : "bg-cyan/10 text-cyan"
+                      }`}
+                    >
+                      {txn.type === "topup" ? (
+                        <ArrowDownLeft className="h-4 w-4" />
+                      ) : (
+                        <ArrowUpRight className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">
+                        {txn.type === "topup"
+                          ? "Deposit"
+                          : txn.type === "transfer"
+                            ? "Withdrawal"
+                            : txn.type === "payment"
+                              ? txn.merchantName || "Payment"
+                              : txn.type}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {txn.createdAt
+                          ? new Date(txn.createdAt).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p
+                      className={`text-sm font-semibold font-[JetBrains_Mono] ${
+                        txn.type === "topup" ? "text-neon-green" : "text-neon-red"
+                      }`}
+                    >
+                      {txn.type === "topup" ? "+" : "-"}$
+                      {txn.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </p>
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] ${
+                        txn.status === "completed"
+                          ? "border-neon-green/30 text-neon-green"
+                          : txn.status === "pending"
+                            ? "border-yellow-500/30 text-yellow-500"
+                            : "border-neon-red/30 text-neon-red"
+                      }`}
+                    >
+                      {txn.status}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
