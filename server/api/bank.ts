@@ -236,6 +236,65 @@ router.get("/transactions", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/bank/account
+ * Get user's full account information
+ */
+router.get("/account", async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id || 1;
+
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    // Auto-create wallet if missing
+    let wallet = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
+
+    if (wallet.length === 0) {
+      console.log(`[Bank] Creating wallet for user ${userId}`);
+      await db.insert(wallets).values({
+        userId,
+        walletType: "prepaid",
+        fundingSourceId: `wallet_${userId}`,
+        balance: "0.00",
+        currency: "USD",
+      });
+
+      wallet = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
+    }
+
+    const balance = parseFloat(wallet[0].balance.toString());
+    const userTransactions = await db.select().from(transactions).where(eq(transactions.userId, userId));
+
+    res.json({
+      success: true,
+      account: {
+        userId,
+        wallet: {
+          id: wallet[0].id,
+          type: wallet[0].walletType,
+          balance,
+          currency: wallet[0].currency,
+          status: wallet[0].status,
+        },
+        transactions: userTransactions.map((t: any) => ({
+          id: t.id,
+          type: t.transactionType,
+          amount: parseFloat(t.amount as string),
+          currency: t.currency,
+          status: t.status,
+          description: t.description,
+          createdAt: t.createdAt,
+        })),
+        providers: getAvailableProviders(),
+      },
+    });
+  } catch (error) {
+    console.error("[Bank API] Get account failed:", error);
+    res.status(500).json({ error: "Failed to get account information" });
+  }
+});
+
+/**
  * GET /api/bank/payment-providers
  * Get available payment providers
  */
