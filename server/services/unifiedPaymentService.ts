@@ -1,283 +1,420 @@
 /**
  * Unified Payment Service
- * Supports PayPal, Cash App, and Venmo for deposits and withdrawals
+ * Combines cryptocurrency and bank transfer processing into one interface
+ * Handles deposits and withdrawals with real money
  */
 
-export type PaymentProvider = "paypal" | "cashapp" | "venmo";
+import {
+  processCryptoDeposit,
+  processBankTransferDeposit,
+  processCryptoWithdrawal,
+  processBankTransferWithdrawal,
+  checkTransactionStatus,
+} from "./realPaymentEngine";
 
-export interface PaymentRequest {
-  provider: PaymentProvider;
-  amount: number;
-  currency: string;
+import {
+  initiateACHTransfer,
+  initiateWireTransfer,
+  getACHTransferStatus,
+  getWireTransferStatus,
+  validateBankAccount,
+  verifyBankAccountOwnership,
+  confirmMicroDepositVerification,
+} from "./bankTransferService";
+
+export interface UnifiedDepositRequest {
   userId: number;
-  walletId: number;
-  description: string;
+  amount: number;
+  method: "crypto" | "ach" | "wire";
+  cryptoCurrency?: "BTC" | "ETH" | "SOL" | "USDC" | "USDT";
+  bankAccount?: {
+    accountNumber: string;
+    routingNumber: string;
+    bankName: string;
+    accountType: "checking" | "savings";
+    accountHolder: string;
+  };
 }
 
-export interface PaymentResponse {
+export interface UnifiedWithdrawalRequest {
+  userId: number;
+  amount: number;
+  method: "crypto" | "ach" | "wire";
+  destinationAddress?: string;
+  destinationBank?: {
+    accountNumber: string;
+    routingNumber: string;
+    bankName: string;
+    accountType: "checking" | "savings";
+    accountHolder: string;
+  };
+  beneficiaryBank?: {
+    name: string;
+    swiftCode: string;
+    routingNumber: string;
+  };
+}
+
+export interface PaymentResult {
   success: boolean;
   transactionId: string;
-  provider: PaymentProvider;
-  status: "pending" | "completed" | "failed";
-  redirectUrl?: string;
-  error?: string;
+  amount: number;
+  method: "crypto" | "ach" | "wire";
+  status: "pending" | "processing" | "completed" | "failed";
+  message: string;
+  estimatedCompletion?: string;
+  details?: Record<string, unknown>;
 }
 
 /**
- * PayPal Payment Handler
+ * Process unified deposit
  */
-async function handlePayPalPayment(request: PaymentRequest): Promise<PaymentResponse> {
+export async function processDeposit(request: UnifiedDepositRequest): Promise<PaymentResult> {
   try {
-    const PAYPAL_API_URL = process.env.PAYPAL_API_URL || "https://api.sandbox.paypal.com";
-    const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || "";
-    const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET || "";
+    if (request.method === "crypto") {
+      if (!request.cryptoCurrency) {
+        return {
+          success: false,
+          transactionId: "",
+          amount: request.amount,
+          method: "crypto",
+          status: "failed",
+          message: "Crypto currency must be specified",
+        };
+      }
 
-    if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
-      console.warn("[PayPal] Credentials not configured, using mock mode");
-      return {
-        success: true,
-        transactionId: `paypal_${Date.now()}`,
-        provider: "paypal",
-        status: "completed",
-      };
-    }
-
-    // Get access token
-    const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString("base64");
-    const tokenResponse = await fetch(`${PAYPAL_API_URL}/v1/oauth2/token`, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${auth}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: "grant_type=client_credentials",
-    });
-
-    if (!tokenResponse.ok) {
-      throw new Error("Failed to get PayPal access token");
-    }
-
-    const tokenData = (await tokenResponse.json()) as any;
-    const accessToken = tokenData.access_token;
-
-    // Create payment
-    const paymentResponse = await fetch(`${PAYPAL_API_URL}/v1/payments/payment`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        intent: "sale",
-        payer: {
-          payment_method: "paypal",
-        },
-        transactions: [
-          {
-            amount: {
-              total: request.amount.toFixed(2),
-              currency: request.currency,
-            },
-            description: request.description,
-            custom: `user_${request.userId}_wallet_${request.walletId}`,
-          },
-        ],
-        redirect_urls: {
-          return_url: `${process.env.APP_URL || "http://localhost:3000"}/api/payments/paypal/return`,
-          cancel_url: `${process.env.APP_URL || "http://localhost:3000"}/api/payments/paypal/cancel`,
-        },
-      }),
-    });
-
-    if (!paymentResponse.ok) {
-      throw new Error("Failed to create PayPal payment");
-    }
-
-    const paymentData = (await paymentResponse.json()) as any;
-    const approvalUrl = paymentData.links?.find((link: any) => link.rel === "approval_url")?.href;
-
-    return {
-      success: true,
-      transactionId: paymentData.id,
-      provider: "paypal",
-      status: "pending",
-      redirectUrl: approvalUrl,
-    };
-  } catch (error) {
-    console.error("[PayPal] Payment failed:", error);
-    return {
-      success: false,
-      transactionId: "",
-      provider: "paypal",
-      status: "failed",
-      error: String(error),
-    };
-  }
-}
-
-/**
- * Cash App Payment Handler
- */
-async function handleCashAppPayment(request: PaymentRequest): Promise<PaymentResponse> {
-  try {
-    const CASHAPP_API_KEY = process.env.CASHAPP_API_KEY || "";
-
-    if (!CASHAPP_API_KEY) {
-      console.warn("[CashApp] API key not configured, using mock mode");
-      return {
-        success: true,
-        transactionId: `cashapp_${Date.now()}`,
-        provider: "cashapp",
-        status: "completed",
-      };
-    }
-
-    // Create Cash App payment request
-    const paymentResponse = await fetch("https://api.square.com/v2/payments", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${CASHAPP_API_KEY}`,
-        "Content-Type": "application/json",
-        "Square-Version": "2024-04-17",
-      },
-      body: JSON.stringify({
-        source_id: "cnp:card-nonce-ok",
-        amount_money: {
-          amount: Math.round(request.amount * 100),
-          currency: request.currency,
-        },
-        idempotency_key: `cashapp_${request.userId}_${Date.now()}`,
-        note: request.description,
-        customer_id: `user_${request.userId}`,
-      }),
-    });
-
-    if (!paymentResponse.ok) {
-      const errorData = await paymentResponse.json();
-      throw new Error(`Cash App payment failed: ${errorData.errors?.[0]?.detail}`);
-    }
-
-    const paymentData = (await paymentResponse.json()) as any;
-
-    return {
-      success: true,
-      transactionId: paymentData.payment?.id || `cashapp_${Date.now()}`,
-      provider: "cashapp",
-      status: "completed",
-    };
-  } catch (error) {
-    console.error("[CashApp] Payment failed:", error);
-    return {
-      success: false,
-      transactionId: "",
-      provider: "cashapp",
-      status: "failed",
-      error: String(error),
-    };
-  }
-}
-
-/**
- * Venmo Payment Handler
- */
-async function handleVenmoPayment(request: PaymentRequest): Promise<PaymentResponse> {
-  try {
-    const VENMO_ACCESS_TOKEN = process.env.VENMO_ACCESS_TOKEN || "";
-
-    if (!VENMO_ACCESS_TOKEN) {
-      console.warn("[Venmo] Access token not configured, using mock mode");
-      return {
-        success: true,
-        transactionId: `venmo_${Date.now()}`,
-        provider: "venmo",
-        status: "completed",
-      };
-    }
-
-    // Create Venmo payment
-    const paymentResponse = await fetch("https://api.venmo.com/v1/payments", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${VENMO_ACCESS_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        user_id: `user_${request.userId}`,
+      const transaction = await processCryptoDeposit({
+        userId: request.userId,
         amount: request.amount,
-        note: request.description,
-        action: "pay",
-        audience: "private",
-      }),
-    });
+        paymentMethod: "crypto",
+        cryptoCurrency: request.cryptoCurrency,
+      });
 
-    if (!paymentResponse.ok) {
-      const errorData = await paymentResponse.json();
-      throw new Error(`Venmo payment failed: ${errorData.error?.message}`);
+      return {
+        success: true,
+        transactionId: transaction.transactionId,
+        amount: transaction.amount,
+        method: "crypto",
+        status: "pending",
+        message: `Crypto deposit initiated. Send ${request.cryptoCurrency} to the provided address.`,
+        estimatedCompletion: "10-30 minutes (depending on network)",
+        details: {
+          cryptoCurrency: request.cryptoCurrency,
+          blockchainVerificationPending: true,
+        },
+      };
+    } else if (request.method === "ach") {
+      if (!request.bankAccount) {
+        return {
+          success: false,
+          transactionId: "",
+          amount: request.amount,
+          method: "ach",
+          status: "failed",
+          message: "Bank account information must be provided",
+        };
+      }
+
+      // Validate bank account
+      const validation = validateBankAccount(request.bankAccount);
+      if (!validation.valid) {
+        return {
+          success: false,
+          transactionId: "",
+          amount: request.amount,
+          method: "ach",
+          status: "failed",
+          message: `Invalid bank account: ${validation.errors.join(", ")}`,
+        };
+      }
+
+      const transaction = await processBankTransferDeposit({
+        userId: request.userId,
+        amount: request.amount,
+        paymentMethod: "bank_transfer",
+        bankAccount: request.bankAccount,
+      });
+
+      return {
+        success: true,
+        transactionId: transaction.transactionId,
+        amount: transaction.amount,
+        method: "ach",
+        status: "pending",
+        message: `ACH deposit initiated. Funds will be available in 2-3 business days.`,
+        estimatedCompletion: "2-3 business days",
+        details: {
+          bankReference: transaction.bankReference,
+          achVerificationPending: true,
+        },
+      };
+    } else if (request.method === "wire") {
+      if (!request.bankAccount) {
+        return {
+          success: false,
+          transactionId: "",
+          amount: request.amount,
+          method: "wire",
+          status: "failed",
+          message: "Bank account information must be provided",
+        };
+      }
+
+      // Validate bank account
+      const validation = validateBankAccount(request.bankAccount);
+      if (!validation.valid) {
+        return {
+          success: false,
+          transactionId: "",
+          amount: request.amount,
+          method: "wire",
+          status: "failed",
+          message: `Invalid bank account: ${validation.errors.join(", ")}`,
+        };
+      }
+
+      const transaction = await processBankTransferDeposit({
+        userId: request.userId,
+        amount: request.amount,
+        paymentMethod: "bank_transfer",
+        bankAccount: request.bankAccount,
+      });
+
+      return {
+        success: true,
+        transactionId: transaction.transactionId,
+        amount: transaction.amount,
+        method: "wire",
+        status: "pending",
+        message: `Wire transfer initiated. Funds will be available same day or next business day.`,
+        estimatedCompletion: "Same day or next business day",
+        details: {
+          bankReference: transaction.bankReference,
+          wireTransferInitiated: true,
+        },
+      };
     }
 
-    const paymentData = (await paymentResponse.json()) as any;
-
-    return {
-      success: true,
-      transactionId: paymentData.data?.payment?.id || `venmo_${Date.now()}`,
-      provider: "venmo",
-      status: "completed",
-    };
-  } catch (error) {
-    console.error("[Venmo] Payment failed:", error);
     return {
       success: false,
       transactionId: "",
-      provider: "venmo",
+      amount: request.amount,
+      method: request.method,
       status: "failed",
-      error: String(error),
+      message: "Invalid payment method",
+    };
+  } catch (error) {
+    console.error("[UnifiedPayment] Deposit failed:", error);
+    return {
+      success: false,
+      transactionId: "",
+      amount: request.amount,
+      method: request.method,
+      status: "failed",
+      message: `Deposit failed: ${error instanceof Error ? error.message : "Unknown error"}`,
     };
   }
 }
 
 /**
- * Process payment with any provider
+ * Process unified withdrawal
  */
-export async function processPayment(request: PaymentRequest): Promise<PaymentResponse> {
-  console.log(`[Payment] Processing ${request.provider} payment: $${request.amount}`);
+export async function processWithdrawal(request: UnifiedWithdrawalRequest): Promise<PaymentResult> {
+  try {
+    if (request.method === "crypto") {
+      if (!request.destinationAddress) {
+        return {
+          success: false,
+          transactionId: "",
+          amount: request.amount,
+          method: "crypto",
+          status: "failed",
+          message: "Destination crypto address must be specified",
+        };
+      }
 
-  switch (request.provider) {
-    case "paypal":
-      return await handlePayPalPayment(request);
-    case "cashapp":
-      return await handleCashAppPayment(request);
-    case "venmo":
-      return await handleVenmoPayment(request);
-    default:
+      const transaction = await processCryptoWithdrawal({
+        userId: request.userId,
+        amount: request.amount,
+        paymentMethod: "crypto",
+        destinationAddress: request.destinationAddress,
+      });
+
       return {
-        success: false,
-        transactionId: "",
-        provider: request.provider,
-        status: "failed",
-        error: "Unknown payment provider",
+        success: true,
+        transactionId: transaction.transactionId,
+        amount: transaction.amount,
+        method: "crypto",
+        status: "pending",
+        message: `Crypto withdrawal initiated. Funds will be sent to your wallet.`,
+        estimatedCompletion: "10-30 minutes (depending on network)",
+        details: {
+          destinationAddress: request.destinationAddress,
+          blockchainTransmissionInProgress: true,
+        },
       };
+    } else if (request.method === "ach") {
+      if (!request.destinationBank) {
+        return {
+          success: false,
+          transactionId: "",
+          amount: request.amount,
+          method: "ach",
+          status: "failed",
+          message: "Destination bank account must be specified",
+        };
+      }
+
+      // Validate destination bank account
+      const validation = validateBankAccount(request.destinationBank);
+      if (!validation.valid) {
+        return {
+          success: false,
+          transactionId: "",
+          amount: request.amount,
+          method: "ach",
+          status: "failed",
+          message: `Invalid destination bank account: ${validation.errors.join(", ")}`,
+        };
+      }
+
+      const transaction = await processBankTransferWithdrawal({
+        userId: request.userId,
+        amount: request.amount,
+        paymentMethod: "bank_transfer",
+        destinationBank: request.destinationBank,
+      });
+
+      return {
+        success: true,
+        transactionId: transaction.transactionId,
+        amount: transaction.amount,
+        method: "ach",
+        status: "pending",
+        message: `ACH withdrawal initiated. Funds will arrive in 2-3 business days.`,
+        estimatedCompletion: "2-3 business days",
+        details: {
+          bankReference: transaction.bankReference,
+          achTransmissionInProgress: true,
+        },
+      };
+    } else if (request.method === "wire") {
+      if (!request.destinationBank || !request.beneficiaryBank) {
+        return {
+          success: false,
+          transactionId: "",
+          amount: request.amount,
+          method: "wire",
+          status: "failed",
+          message: "Destination bank and beneficiary bank information must be specified",
+        };
+      }
+
+      // Validate destination bank account
+      const validation = validateBankAccount(request.destinationBank);
+      if (!validation.valid) {
+        return {
+          success: false,
+          transactionId: "",
+          amount: request.amount,
+          method: "wire",
+          status: "failed",
+          message: `Invalid destination bank account: ${validation.errors.join(", ")}`,
+        };
+      }
+
+      const transaction = await processBankTransferWithdrawal({
+        userId: request.userId,
+        amount: request.amount,
+        paymentMethod: "bank_transfer",
+        destinationBank: request.destinationBank,
+      });
+
+      return {
+        success: true,
+        transactionId: transaction.transactionId,
+        amount: transaction.amount,
+        method: "wire",
+        status: "pending",
+        message: `Wire transfer initiated. Funds will arrive same day or next business day.`,
+        estimatedCompletion: "Same day or next business day",
+        details: {
+          bankReference: transaction.bankReference,
+          wireTransferInitiated: true,
+        },
+      };
+    }
+
+    return {
+      success: false,
+      transactionId: "",
+      amount: request.amount,
+      method: request.method,
+      status: "failed",
+      message: "Invalid payment method",
+    };
+  } catch (error) {
+    console.error("[UnifiedPayment] Withdrawal failed:", error);
+    return {
+      success: false,
+      transactionId: "",
+      amount: request.amount,
+      method: request.method,
+      status: "failed",
+      message: `Withdrawal failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+    };
   }
 }
 
 /**
- * Get available payment providers
+ * Check payment status
  */
-export function getAvailableProviders(): PaymentProvider[] {
-  const providers: PaymentProvider[] = [];
-
-  if (process.env.PAYPAL_CLIENT_ID) providers.push("paypal");
-  if (process.env.CASHAPP_API_KEY) providers.push("cashapp");
-  if (process.env.VENMO_ACCESS_TOKEN) providers.push("venmo");
-
-  // Always include all providers (they have mock mode)
-  if (providers.length === 0) {
-    return ["paypal", "cashapp", "venmo"];
+export async function checkPaymentStatus(transactionId: string): Promise<{
+  found: boolean;
+  status?: string;
+  message?: string;
+}> {
+  // Check crypto transaction
+  const cryptoTransaction = await checkTransactionStatus(transactionId);
+  if (cryptoTransaction) {
+    return {
+      found: true,
+      status: cryptoTransaction.status,
+      message: `Crypto transaction: ${cryptoTransaction.status}`,
+    };
   }
 
-  return providers;
+  // Check ACH transfer
+  const achTransfer = getACHTransferStatus(transactionId);
+  if (achTransfer) {
+    return {
+      found: true,
+      status: achTransfer.status,
+      message: `ACH transfer: ${achTransfer.status}`,
+    };
+  }
+
+  // Check Wire transfer
+  const wireTransfer = getWireTransferStatus(transactionId);
+  if (wireTransfer) {
+    return {
+      found: true,
+      status: wireTransfer.status,
+      message: `Wire transfer: ${wireTransfer.status}`,
+    };
+  }
+
+  return {
+    found: false,
+    message: "Transaction not found",
+  };
 }
 
-export default {
-  processPayment,
-  getAvailableProviders,
+export const unifiedPaymentService = {
+  processDeposit,
+  processWithdrawal,
+  checkPaymentStatus,
+  validateBankAccount,
+  verifyBankAccountOwnership,
+  confirmMicroDepositVerification,
 };
