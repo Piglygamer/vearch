@@ -17,6 +17,9 @@ import adminRouter from "../api/admin";
 import appletDeploymentRouter from "../api/applet-deployment";
 import appletRouter from "../api/applet";
 import monitoringRouter from "../api/monitoring";
+import cryptoRouter from "../api/crypto";
+import multiPaymentRouter from "../api/multi-payment";
+import cashWithdrawalRouter from "../api/cash-withdrawal";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -59,6 +62,12 @@ async function startServer() {
   app.use("/api/admin", adminRouter);
   // Monitoring API
   app.use("/api/monitoring", monitoringRouter);
+  // Crypto Payment API
+  app.use("/api/crypto", cryptoRouter);
+  // Multi-Payment API (all methods)
+  app.use("/api/multi-payment", multiPaymentRouter);
+  // Cash Withdrawal API
+  app.use("/api/cash-withdrawal", cashWithdrawalRouter);
   // Stripe Webhook
   app.use("/api/stripe", stripeWebhookRouter);
   // tRPC API
