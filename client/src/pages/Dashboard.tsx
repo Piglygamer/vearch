@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DepositModal } from "@/components/DepositModal";
+import { WithdrawalModal } from "@/components/WithdrawalModal";
 
 export default function Dashboard() {
   const [implants, setImplants] = useState<any[]>([]);
@@ -547,36 +548,16 @@ export default function Dashboard() {
         bankAccountId={bankAccount?.stripeAccountId}
       />
 
-      {/* Withdraw Modal */}
-      <Dialog open={showWithdrawModal} onOpenChange={setShowWithdrawModal}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Withdraw Money</DialogTitle>
-            <DialogDescription>
-              Withdraw funds from your Vearch Bank account
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="withdraw-amount">Amount (USD)</Label>
-              <Input
-                id="withdraw-amount"
-                type="number"
-                placeholder="0.00"
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-              />
-            </div>
-            <Button
-              onClick={handleWithdraw}
-              disabled={isProcessing || !withdrawAmount}
-              className="w-full bg-cyan-600 hover:bg-cyan-700"
-            >
-              {isProcessing ? "Processing..." : "Withdraw"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Withdrawal Modal */}
+      <WithdrawalModal
+        open={showWithdrawModal}
+        onOpenChange={setShowWithdrawModal}
+        onSuccess={() => {
+          setWithdrawAmount("");
+          fetchDashboardData();
+        }}
+        balance={balance}
+      />
     </div>
   );
 }

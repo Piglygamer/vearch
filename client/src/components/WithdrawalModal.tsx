@@ -6,11 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 
-interface DepositModalProps {
+interface WithdrawalModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
-  bankAccountId?: string;
+  balance: number;
 }
 
 const PAYMENT_PROVIDERS = [
@@ -19,22 +19,28 @@ const PAYMENT_PROVIDERS = [
   { id: "venmo", name: "Venmo", icon: "📱" },
 ];
 
-export function DepositModal({ open, onOpenChange, onSuccess, bankAccountId }: DepositModalProps) {
+export function WithdrawalModal({ open, onOpenChange, onSuccess, balance }: WithdrawalModalProps) {
   const [amount, setAmount] = useState("");
   const [provider, setProvider] = useState("paypal");
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleDeposit = async (e: React.FormEvent) => {
+  const handleWithdrawal = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!amount) {
-      setError("Please enter a deposit amount");
+      setError("Please enter a withdrawal amount");
       return;
     }
     
-    if (parseFloat(amount) <= 0) {
-      setError("Deposit amount must be greater than 0");
+    const withdrawAmount = parseFloat(amount);
+    if (withdrawAmount <= 0) {
+      setError("Withdrawal amount must be greater than 0");
+      return;
+    }
+
+    if (withdrawAmount > balance) {
+      setError(`Insufficient balance. Available: $${balance.toFixed(2)}`);
       return;
     }
 
@@ -42,14 +48,13 @@ export function DepositModal({ open, onOpenChange, onSuccess, bankAccountId }: D
     setError(null);
 
     try {
-      // Process deposit on backend
-      const res = await fetch("/api/bank/deposit", {
+      // Process withdrawal on backend
+      const res = await fetch("/api/bank/withdraw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: parseFloat(amount),
+          amount: withdrawAmount,
           provider,
-          bankAccountId,
         }),
       });
 
@@ -60,7 +65,7 @@ export function DepositModal({ open, onOpenChange, onSuccess, bankAccountId }: D
         onOpenChange(false);
         onSuccess();
       } else {
-        setError(data.error || "Deposit failed");
+        setError(data.error || "Withdrawal failed");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -73,9 +78,9 @@ export function DepositModal({ open, onOpenChange, onSuccess, bankAccountId }: D
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Deposit Money</DialogTitle>
+          <DialogTitle>Withdraw Money</DialogTitle>
           <DialogDescription>
-            Add funds to your Vearch Bank account using your credit or debit card
+            Withdraw funds from your Vearch Bank account to your bank account
           </DialogDescription>
         </DialogHeader>
 
@@ -86,14 +91,20 @@ export function DepositModal({ open, onOpenChange, onSuccess, bankAccountId }: D
           </Alert>
         )}
 
-        <form onSubmit={handleDeposit} className="space-y-4">
+        <div className="bg-background/50 border border-border rounded-md p-3 mb-4">
+          <p className="text-sm text-muted-foreground">Available Balance</p>
+          <p className="text-2xl font-bold text-cyan-400">${balance.toFixed(2)}</p>
+        </div>
+
+        <form onSubmit={handleWithdrawal} className="space-y-4">
           <div>
-            <Label htmlFor="deposit-amount">Amount (USD)</Label>
+            <Label htmlFor="withdrawal-amount">Amount (USD)</Label>
             <Input
-              id="deposit-amount"
+              id="withdrawal-amount"
               type="number"
               step="0.01"
               min="1"
+              max={balance}
               placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
@@ -121,9 +132,9 @@ export function DepositModal({ open, onOpenChange, onSuccess, bankAccountId }: D
           <Button
             type="submit"
             disabled={isProcessing || !amount}
-            className="w-full bg-magenta-600 hover:bg-magenta-700"
+            className="w-full bg-cyan-600 hover:bg-cyan-700"
           >
-            {isProcessing ? "Processing..." : `Deposit $${amount || "0.00"}`}
+            {isProcessing ? "Processing..." : `Withdraw $${amount || "0.00"}`}
           </Button>
         </form>
       </DialogContent>
