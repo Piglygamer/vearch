@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DepositModal } from "@/components/DepositModal";
 import { WithdrawalModal } from "@/components/WithdrawalModal";
+import { ImplantLinkingWizard } from "@/components/ImplantLinkingWizard";
 
 export default function Dashboard() {
   const [implants, setImplants] = useState<any[]>([]);
@@ -25,6 +26,7 @@ export default function Dashboard() {
   const [showBankModal, setShowBankModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showImplantWizard, setShowImplantWizard] = useState(false);
   
   // Form states
   const [bankEmail, setBankEmail] = useState("");
@@ -393,25 +395,46 @@ export default function Dashboard() {
           {/* Implants Tab */}
           <TabsContent value="implants" className="space-y-4">
             {implants.length === 0 ? (
-              <Card className="border-border/50 bg-card/50">
-                <CardContent className="pt-6 text-center">
-                  <p className="text-muted-foreground">No implants linked yet. Link your NxtPay implant to get started.</p>
+              <Card className="border-magenta-500/30 bg-card/50 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle>Link Your First Implant</CardTitle>
+                  <CardDescription>Connect your Apex Flex implant to enable tap-to-pay transactions</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">Your implant will be linked to your Vearch Bank wallet, allowing you to make payments by tapping your implant on NFC readers.</p>
+                  <Button
+                    onClick={() => setShowImplantWizard(true)}
+                    className="w-full bg-magenta-600 hover:bg-magenta-700"
+                  >
+                    <Zap className="w-4 h-4 mr-2" />
+                    Link Implant
+                  </Button>
                 </CardContent>
               </Card>
             ) : (
-              implants.map((implant) => (
-                <Card key={implant.id} className="border-magenta-500/30 bg-card/50 backdrop-blur-sm">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle>{implant.implantType}</CardTitle>
-                        <CardDescription className="font-mono text-xs mt-1">{implant.implantId}</CardDescription>
+              <>
+                {implants.map((implant) => (
+                  <Card key={implant.id} className="border-magenta-500/30 bg-card/50 backdrop-blur-sm">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <CardTitle>{implant.implantType}</CardTitle>
+                          <CardDescription className="font-mono text-xs mt-1">{implant.implantId}</CardDescription>
+                        </div>
+                        <Badge className={getStatusColor(implant.status)}>{implant.status.toUpperCase()}</Badge>
                       </div>
-                      <Badge className={getStatusColor(implant.status)}>{implant.status.toUpperCase()}</Badge>
-                    </div>
-                  </CardHeader>
-                </Card>
-              ))
+                    </CardHeader>
+                  </Card>
+                ))}
+                <Button
+                  onClick={() => setShowImplantWizard(true)}
+                  variant="outline"
+                  className="w-full border-magenta-500/50 hover:bg-magenta-500/10"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Link Another Implant
+                </Button>
+              </>
             )}
           </TabsContent>
 
@@ -557,6 +580,15 @@ export default function Dashboard() {
           fetchDashboardData();
         }}
         balance={balance}
+      />
+
+      {/* Implant Linking Wizard */}
+      <ImplantLinkingWizard
+        open={showImplantWizard}
+        onOpenChange={setShowImplantWizard}
+        onSuccess={() => {
+          fetchDashboardData();
+        }}
       />
     </div>
   );
