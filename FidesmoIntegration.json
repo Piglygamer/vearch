@@ -1,0 +1,16 @@
+
+{
+  "serviceId": "vearch-payment-v1",
+  "name": "Vearch Payment",
+  "description": "Official Vearch Payment Applet for Apex Flex",
+  "appletAid": "A000000004564541524348",
+  "capabilities": [
+    "EMV_4_3",
+    "DDA_RSA_2048",
+    "PIN_OFFLINE"
+  ],
+  "apiEndpoints": {
+    "callback": "https://api.vearch.bank/fidesmo/callback",
+    "personalize": "https://api.vearch.bank/fidesmo/personalize"
+  }
+}

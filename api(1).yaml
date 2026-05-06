@@ -1,0 +1,3061 @@
+openapi: "3.1.0"
+info:
+  description: Fidesmo API documentation.
+  version: "3.0"
+  title: Fidesmo API
+  contact:
+    name: Fidesmo Support
+    email: support@fidesmo.com
+servers:
+  - url: https://api.fidesmo.com/{apiVersion}
+    description: Production server
+    variables:
+      apiVersion:
+        enum: ["", v2, v3]
+        description: API version, if none is set then v3 is picked.
+        default: v3
+  - url: https://staging.fidesmo.com/{apiVersion}
+    description: Staging server
+    variables:
+      apiVersion:
+        enum: ["", v2, v3]
+        description: API version, if none is set then v3 is picked.
+        default: v3
+paths:
+  /token:
+    post:
+      operationId: createToken
+      tags: [ Management ]
+      summary: Create user token
+      description: Creates a session or a long lived service token for specified user credentials.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRequest'
+      responses:
+        '200':
+          description: User token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Invalid request
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: Invalid request
+        '403':
+          description: Authorization failed
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "Authorization failed"
+  /certs:
+    get:
+      operationId: getCertificates
+      tags: [ Management ]
+      summary: Returns public certificates
+      description: Used to obtain public keys in JSON Web Key format (RFC-7517) used to verify JWT tokens issued by the backend.
+      responses:
+        '200':
+          description: JSON Web Keys list
+          content:
+            application/json:
+              schema:
+                type: object
+                description: List of JWKs
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      required: [ kty, use, alg, kid ]
+                      properties:
+                        kty:
+                          type: string
+                          description: Key Type RSA or EC
+                          enum: [RSA, EC]
+                          example: EC
+                        use:
+                          type: string
+                          description: Key use. As keys only used to verifying signatures it always set to 'sig'
+                          enum: [ sig, enc]
+                          example: sig
+                        alg:
+                          type: string
+                          description: Algorithm intended for use with the key
+                          example: ES256
+                        kid:
+                          type: string
+                          description: Key identifier used to match specific key
+                          example: r2EjfaE0ov6ot7F4i5VJLvdAJ1TnI024
+                        x5c:
+                          type: array
+                          description: X.509 certificate chain. Used for RSA keys
+                          items:
+                            type: string
+                            description: Base64 encoded PKIX certificate
+                        x5t:
+                          type: string
+                          description: X.509 certificate SHA-1 thumbprint
+                          example: 13dEKd5QG4STa6Di94Sw6kY
+                        n:
+                          type: string
+                          description: RSA key modulus (only present for RSA keys)
+                        e:
+                          type: string
+                          description: RSA key public exponent (only present for RSA keys)
+                        x:
+                          type: string
+                          description: X coordinate of EC public point (only present for EC keys)
+                        y:
+                          type: string
+                          description: Y coordinate of EC public point (only present for EC keys)
+                        crv:
+                          type: string
+                          description: Curve name (only present for EC keys)
+                          example: secp256r1
+                example: {"keys":[{"alg":"ES256","crv":"secp256r1","kid":"test-key","kty":"EC","use":"sig","x":"CN2v7W0PyJr8_qWorfB0AJVZYP-IyXoM7fGzjGBU2KY","y":"du1pEdCtpX4uZHnKJUK_hVHSQ3DYCu348gn_sqm3RgI"}]}
+        '403':
+          description: Authorization failed
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: Authentication failed
+  /user:
+    get:
+      operationId: getCurrentUser
+      tags: [ Management ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Returns current user information
+      description: Return current user login, roles and permissions for credentials.
+      responses:
+        '200':
+          description: User credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '403':
+          description: Authorization failed
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: Authentication failed
+  /client-releases.json:
+    get:
+      operationId: getClientReleaseInfo
+      tags: [ Client ]
+      summary: Get client release information
+      description: Get information about the latest client release
+      responses:
+        '200':
+          description: CAP files list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientReleaseInfo'
+    put:
+      operationId: updateClientReleaseInfo
+      tags: [ Client ]
+      security:
+        - credentials: [ ]
+        - token: [ ]
+        - oauth2: [ fidesmoAdmin ]
+      summary: Update client release information
+      description: Update information about the latest client release
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientReleaseInfo'
+      responses:
+        '200':
+          description: Client release information updated
+          content:
+            text/plain:
+              schema:
+                example: "OK"
+        '400':
+          description: Malformed json file.
+          content:
+            text/plain:
+              schema:
+                example: Bad request
+        '401':
+          description: No authentication of the user
+          content:
+            text/plain:
+              schema:
+                example: Unauthorized
+        '403':
+          description: User has no authorization to access the resource
+          content:
+            text/plain:
+              schema:
+                example: Forbidden
+  /desfire/ev1/createApp:
+    post:
+      operationId: createdDesfireApp
+      tags: [ ServiceProvider ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Create a MIFARE DESFire EV1 application
+      description: Create a DESFire EV1 application with the designated ID and Application Master Key (AMK). All other application keys are set to default value. Operation will fail if the application already exists or there is no enough space in the device. Fidesmo does not keep any copy of the AMK. It is the sole responsibility of the creator of the application to keep the AMK safe.
+      parameters:
+        - in: header
+          name: callbackUrl
+          description: URL that will be called with the result of this operation as the body of the HTTP request
+          schema:
+            type: string
+          required: true
+        - in: header
+          name: sessionId
+          description: The session identifier of an ongoing Service Delivery session. This marks this operation as a part of the service being delivered
+          schema:
+            type: string
+          required: true
+      requestBody:
+        required: true
+        description: Data required for creating the DESFire application (see schema doc for more info)
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDesfireAppRequest'
+      responses:
+        '200':
+          description: Operation accepted. The operation itself is performed asynchronously and the result is sent via the operation's callbackUrl
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+        '400':
+          description: Bad Request
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: Unprocessable Entity
+          content:
+            text/plain:
+              schema:
+                type: string
+      callbacks:
+        OperationComplete:
+          '{$request.header.callbackUrl}':
+            post:
+              requestBody:
+                description: Operation completed
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/OperationSuccess'
+              responses:
+                '200':
+                  description: Content is ignored
+  /desfire/ev1/deleteApp:
+    post:
+      operationId: deleteDesfireApp
+      tags: [ ServiceProvider ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Delete a MIFARE DESFire EV1 application
+      description: Delete the DESFire EV1 application with the given ID. To ensure that the requester is the owner of the application the AMK must also be included in the request. Its validity is verified by running an AES authentication against the application. If that authentication is not successful the operation will fail.
+      parameters:
+        - name: callbackUrl
+          in: header
+          description: URL that will be called with the result of this operation as the body of the HTTP request
+          schema:
+            type: string
+          required: true
+        - name: sessionId
+          in: header
+          description: The session identifier of an ongoing Service Delivery session. This marks this operation as a part of the service being delivered.
+          schema:
+            type: string
+          required: true
+      requestBody:
+        required: true
+        description: Data required for deleting the DESFire application (see schema doc for more info)
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteDesfireAppRequest'
+      responses:
+        '200':
+          description: Operation accepted. The operation itself is performed asynchronously and the result is sent via the operation's callbackUrl
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+        '400':
+          description: Bad Request
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: Unprocessable Entity
+          content:
+            text/plain:
+              schema:
+                type: string
+      callbacks:
+        OperationComplete:
+          '{$request.header.callbackUrl}':
+            post:
+              requestBody:
+                description: Operation completed
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/OperationSuccess'
+              responses:
+                '200':
+                  description: Content is ignored
+  /desfire/ev1/transceive:
+    post:
+      operationId: desfireTransceive
+      tags: [ ServiceProvider ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Send a sequence of APDU commands to a DESFire application
+      description: Sends the specified commands to a DESFire EV1 application with the given ID
+      parameters:
+        - name: callbackUrl
+          in: header
+          description: URL that will be called with the result of this operation as the body of the HTTP request
+          schema:
+            type: string
+          required: true
+        - name: sessionId
+          in: header
+          description: The session identifier of an ongoing Service Delivery session. This marks this operation as a part of the service being delivered.
+          schema:
+            type: string
+          required: true
+      requestBody:
+        required: true
+        description: Data required for deleting the DESFire application (see schema doc for more info)
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransceiveDESFireRequest'
+      responses:
+        '200':
+          description: Operation accepted. The operation itself is performed asynchronously and the result is sent via the operation's callbackUrl
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+        '400':
+          description: Bad Request
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: Unprocessable Entity
+          content:
+            text/plain:
+              schema:
+                type: string
+      callbacks:
+        OperationComplete:
+          '{$request.header.callbackUrl}':
+            post:
+              requestBody:
+                description: Operation completed
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/TransceiveSuccess'
+              responses:
+                '200':
+                  description: Content is ignored
+  /ccm/install:
+    post:
+      operationId: ccmInstall
+      summary: Install application to card
+      tags: [ ServiceProvider ]
+      security:
+        - token: []
+        - oauth2: []
+      description: <p>Create an application instance on a card from an executable load file previously uploaded to Fidesmo.</p><p>The result of the operation is sent via the operation''s callbackUrl. It''s either a success (status code 200) or a failure (any other status code).
+      parameters:
+        - in: header
+          name: callbackUrl
+          description: URL that will be called with the result of this operation as the body of the HTTP request
+          schema:
+            type: string
+          required: true
+        - in: header
+          name: sessionId
+          description: The session identifier of an ongoing Service Delivery session. This marks this operation as a part of the service being delivered.
+          schema:
+            type: string
+          required: false
+      requestBody:
+        required: true
+        description: 'Information needed to register the application on the card and make it selectable. It is possible to submit install parameters, but they must come without the ''C9'' tag and length. You can also optionally set ''encryptLoad'' to false, this will transfer the load file in clear text while still sending any install parameters encrypted. An optional progress parameter can be specified to indicate the progress made so far in the service delivery process.'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CcmInstall'
+      responses:
+        '200':
+          description: Operation accepted. The operation itself is performed asynchronously and the result is sent via the operation's callbackUrl
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+      callbacks:
+        OperationComplete:
+          '{$request.header.callbackUrl}':
+            post:
+              requestBody:
+                description: Operation completed
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/OperationSuccess'
+              responses:
+                '200':
+                  description: Content is ignored
+  /ccm/delete:
+    post:
+      operationId: ccmDelete
+      summary: Delete application from a card
+      tags: [ ServiceProvider ]
+      security:
+        - token: []
+        - oauth2: []
+      description: Deletes an application from the card
+      parameters:
+        - in: header
+          name: callbackUrl
+          description: URL that will be called with the result of this operation as the body of the HTTP request
+          schema:
+            type: string
+          required: true
+        - in: header
+          name: sessionId
+          description: The session identifier of an ongoing Service Delivery session. This marks this operation as a part of the service being delivered.
+          schema:
+            type: string
+          required: false
+      requestBody:
+        required: true
+        description: Information to identify the application that shall be removed from
+          the card. The withRelated property is used when deleting an ELF from
+          the card. If it is set to true all applet instances related to the
+          ELF will also be deleted. This is useful if the AID of your instance
+          is not generated by Fidesmo and therefore can not be deleted
+          directly. An optional progress parameter can be specified to
+          indicate the progress made so far in the service delivery process.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CcmDelete'
+      responses:
+        '200':
+          description: Operation accepted. The operation itself is performed asynchronously and the result is sent via the operation's callbackUrl
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+      callbacks:
+        OperationComplete:
+          '{$request.header.callbackUrl}':
+            post:
+              requestBody:
+                description: Operation completed
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/OperationSuccess'
+              responses:
+                '200':
+                  description: Content is ignored
+  /ccm/load:
+    post:
+      operationId: ccmLoad
+      summary: Load application to card
+      tags: [ ServiceProvider ]
+      security:
+        - token: []
+        - oauth2: []
+      description: Load into a card an executable load file that has been previously uploaded to Fidesmo
+      parameters:
+        - in: header
+          name: callbackUrl
+          description: URL that will be called with the result of this operation as the
+            body of the HTTP request
+          schema:
+            type: string
+          required: true
+        - in: header
+          name: sessionId
+          description: The session identifier of an ongoing Service Delivery session. This
+            marks this operation as a part of the service being delivered.
+          schema:
+            type: string
+          required: false
+      requestBody:
+        required: true
+        description: Information about the software package being loaded
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CcmLoad'
+      responses:
+        '200':
+          description: Operation accepted. The operation itself is performed asynchronously and the result is sent via the operation's callbackUrl
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+      callbacks:
+        OperationComplete:
+          '{$request.header.callbackUrl}':
+            post:
+              requestBody:
+                description: Operation completed
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/OperationSuccess'
+              responses:
+                '200':
+                  description: Content is ignored
+  /ccm/personalize:
+    post:
+      operationId: ccmPersonalize
+      summary: Personalize non-extradited application securely with the specified data
+      tags: [ ServiceProvider ]
+      security:
+        - token: []
+        - oauth2: []
+      description: Personalize a non-extradited application instance on a card using provided tags.
+      parameters:
+        - in: header
+          name: callbackUrl
+          description: URL that will be called with the result of this operation as the body of the HTTP request
+          schema:
+            type: string
+          required: true
+        - in: header
+          name: sessionId
+          description: The session identifier of an ongoing Service Delivery session. This marks this operation as a part of the service being delivered.
+          schema:
+            type: string
+          required: false
+      requestBody:
+        required: true
+        description: Data used to personalize an application coming as Hex form of a byte array with TLV or DGI tags that should be sent to the application. Specified AID has to belong to the Fidesmo application.
+          Additionally it is possible to specify encryption and padding parameters for each Tag. An optional progress parameter can be specified to indicate the progress made so far in the service delivery process.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CcmPersonalize'
+      responses:
+        '200':
+          description: Operation accepted. The operation itself is performed asynchronously and the result is sent via the operation's callbackUrl
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+      callbacks:
+        OperationComplete:
+          '{$request.header.callbackUrl}':
+            post:
+              requestBody:
+                description: Operation completed
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/OperationSuccess'
+              responses:
+                '200':
+                  description: Content is ignored
+  /ccm/storedata:
+    post:
+      operationId: ccmStoreData
+      summary: Personalize application securely with the specified data
+      tags: [ ServiceProvider ]
+      security:
+        - token: []
+        - oauth2: []
+      description: Personalize an application instance on a card using provided tags
+      parameters:
+        - in: header
+          name: callbackUrl
+          description: URL that will be called with the result of this operation as the body of the HTTP request
+          schema:
+            type: string
+          required: true
+        - in: header
+          name: sessionId
+          description: The session identifier of an ongoing Service Delivery session. This marks this operation as a part of the service being delivered.
+          schema:
+            type: string
+          required: false
+      requestBody:
+        required: true
+        description: Data used to personalize an application coming as Hex form of a byte array with TLV or DGI tags that should be sent to the application. Specified AID has to belong to the Fidesmo application.
+          Additionally it is possible to specify encryption and padding parameters for each Tag. An optional progress parameter can be specified to indicate the progress made so far in the service delivery process.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CcmStoreData'
+      responses:
+        '200':
+          description: Operation accepted. The operation itself is performed asynchronously and the result is sent via the operation's callbackUrl
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+      callbacks:
+        OperationComplete:
+          '{$request.header.callbackUrl}':
+            post:
+              requestBody:
+                description: Operation completed
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/OperationSuccess'
+              responses:
+                '200':
+                  description: Content is ignored
+  /transceive:
+    post:
+      operationId: transceive
+      summary: Send a sequence of Command APDUs
+      tags: [ ServiceProvider ]
+      security:
+        - token: []
+        - oauth2: []
+      description: <p>Prepares a sequence of Command APDUs to be sent to a secure
+        element.</p><p>The commands are sent in the same order as they are
+        received and will be transferred in a single batch to the secure
+        element. Each command is processed in order regardless of error codes
+        until all commands are processed. The responses from the card will be
+        sent via the operation's callbackUrl.
+      parameters:
+        - in: header
+          name: callbackUrl
+          schema:
+            type: string
+          description: URL that will be called with the result of this operation as the body of the HTTP request
+          required: true
+        - in: header
+          name: sessionId
+          schema:
+            type: string
+          description: The session identifier of an ongoing Service Delivery session. This marks this operation as a part of the service being delivered.
+          required: false
+      requestBody:
+        required: true
+        description: 'List of APDU commands'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transceive'
+      responses:
+        '200':
+          description: Operation accepted. The operation itself is performed asynchronously and the result is sent via the operation's callbackUrl
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+      callbacks:
+        OperationComplete:
+          '{$request.header.callbackUrl}':
+            post:
+              requestBody:
+                description: Operation completed
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/TransceiveSuccess'
+              responses:
+                '200':
+                  description: Content is ignored
+  /secure-transceive:
+    post:
+      operationId: secureTransceive
+      summary: Send a sequence of Command APDUs in a secure session
+      tags: [ ServiceProvider ]
+      security:
+        - token: []
+        - oauth2: []
+      description: "<p>Establishes a Secure connection to a specified application and
+        sends a sequence of Command APDUs to a secure element in it.</p><p>The
+        commands are encrypted with a session key and authenticated, security
+        level is <code>C_DECRYPTION</code> and <code>C_MAC</code>. Each command
+        is processed in order they received regardless of error codes until all
+        commands are processed. Established secure connection will be reused for
+        subsequent operation calls in the same session, unless \"resetSession\"
+        is set to true or application AID is changed.</p> See `TransceiveSuccess` object for callback format."
+      parameters:
+        - in: header
+          name: callbackUrl
+          schema:
+            type: string
+          description: URL that will be called with the result of this operation as the body of the HTTP request
+          required: true
+        - in: header
+          name: sessionId
+          schema:
+            type: string
+          description: The session identifier of an ongoing Service Delivery session. This marks this operation as a part of the service being delivered.
+          required: false
+      requestBody:
+        required: true
+        description: Application AID to connect to and array of unencrypted Command
+          APDUs that will be encrypted and sent to the card. Each command is
+          represented by a hexadecimal encoded string. Put the data into a
+          JSON encoded array as the 'commands' property. Specified AID has to
+          belong to the Fidesmo application. An optional progress parameter
+          can be specified to indicate the progress made so far in the service
+          delivery process.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecureTransceiveRequest'
+      responses:
+        '200':
+          description: Operation accepted. The operation itself is performed asynchronously and the result is sent via the operation's callbackUrl
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+      callbacks:
+        OperationComplete:
+          '{$request.header.callbackUrl}':
+            post:
+              requestBody:
+                description: Operation completed
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/TransceiveSuccess'
+              responses:
+                '200':
+                  description: Content is ignored
+  /userInteraction:
+    post:
+      operationId: userInteraction
+      summary: Prompt an interaction to the user during service delivery
+      tags: [ ServiceProvider ]
+      security:
+        - token: []
+        - oauth2: []
+      description: Requests a UI form to be shown on the client side during the delivery process or triggers predefined UI actions. Service provider specifies list of fields to request from user and should expect a callback with filled results. Server doesn't validate presence of all requested fields and their format, so this has to be done on the service provider. Optionally fields can be encrypted on the
+        client side by the certificate provided by the Service Provider in the service description.
+      parameters:
+        - in: header
+          name: callbackUrl
+          schema:
+            type: string
+          description: URL that will be called with the result of this operation as the body of the HTTP request
+          required: true
+        - in: header
+          name: sessionId
+          schema:
+            type: string
+          description: The session identifier of an ongoing Service Delivery session. This marks this operation as a part of the service being delivered.
+          required: false
+      requestBody:
+        required: true
+        description: Array of fields and UI actions that will be shown to the user. An optional progress parameter can be specified to indicate the progress made so far in the service delivery process.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserInteraction'
+      responses:
+        '200':
+          description: Operation accepted. The operation itself is performed asynchronously and the result is sent via the operation's callbackUrl
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+      callbacks:
+        OperationComplete:
+          '{$request.header.callbackUrl}':
+            post:
+              requestBody:
+                description: Operation completed
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/UserInteractionSuccess'
+              responses:
+                '200':
+                  description: Content is ignored
+  /service/completed:
+    post:
+      operationId: completeDelivery
+      tags: [ ServiceProvider ]
+      summary: Complete delivery of a service
+      description: This method is used to inform Fidesmo that a service was successfully delivered. If this endpoint is not called, the service delivery will time out and will be considered failed.
+      security:
+        - token: []
+        - oauth2: []
+      parameters:
+        - name: sessionId
+          in: header
+          description: The session identifier of an ongoing Service Delivery session. This marks this operation as a part of the service being delivered.
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceStatus'
+      responses:
+        '200':
+          description: Delivery completed
+  /apps:
+    get:
+      operationId: listApplications
+      tags: [ Management ]
+      summary: Get a list of apps which offer public services
+      description: Return applications list for a specific client and device
+      parameters:
+        - name: cin
+          in: query
+          description: Device CIN. Allows to show applications available only for that device
+          required: false
+          schema:
+            type: string
+        - name: devicePresent
+          in: query
+          description: True if client is able to perform operations on device (default). Allows to hide applications that cannot be delivered without device
+          required: false
+          schema:
+            type: boolean
+        - name: fields
+          in: query
+          description: If set to `all` response will contain a list of application description objects, otherwise only application IDs will be returned
+          required: false
+          example: all
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Applications list
+          content:
+            application/json:
+              schema:
+                type: array
+                description: Applications information or IDs list. Depending on the `fields` parameter.
+                items:
+                  anyOf:
+                    - $ref: '#/components/schemas/App'
+                    - type: string
+                      description: Application ID
+                      example: "ab0456ff"
+  /apps/{appId}:
+    get:
+      operationId: getApplication
+      tags: [ Management ]
+      summary: Query information about an app
+      description: <p>This endpoint provides information about the app (name, organization, logo, install and uninstall services)
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Application public information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/App'
+        '404':
+          description: Application not found
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Application not found
+    put:
+      operationId: updateApplication
+      tags: [ Management ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Set full application configuration
+      description:
+        Allows to change the configuration and description for your app. Allows setting delivery URLs, services visibility etc.
+        To obtain full application information use GET /apps/{appId}/full endpoint.
+        Some fields (e.g. publishing state) can only be changed by Fidesmo team in that case they have to be submitted without changes, check the fields descriptions for details.
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: Description and configuration of the app. Name can be given as a multilanguage string or as a string.
+          The Description may contain basic markdown elements (like emph, links, or bold). The organization is stored as an object
+          with name being currently the only key. Install services is an array of service names that can be used to install the app on a card.
+          Uninstall service is a name of the service that removes app from a card.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoredApp'
+      responses:
+        '200':
+          description: Application information
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "OK"
+        '401':
+          description: Authorization failed
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Authorization failed
+        '403':
+          description: No permissions to access the application or change the field
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: User is not allowed to publish the application
+        '404':
+          description: Application not found
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Application not found
+  /apps/{appId}/full:
+    get:
+      operationId: getFullApplication
+      tags: [ Management ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Query information about an app
+      description: This endpoint provides full information about the app including private configuration.
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Application full configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoredApp'
+        '401':
+          description: Authorization failed
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Authorization failed
+        '403':
+          description: No access to the application
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: No access to the application
+        '404':
+          description: Application not found
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Application not found
+  /apps/{appId}/services:
+    get:
+      operationId: getAppServices
+      tags: [ Management ]
+      summary: Get list of the application services
+      description: Return a list of service ids that are publicly available for a given app. More non-public services may exist.
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+        - name: cin
+          in: query
+          description: Device CIN. Allows to show service prices correctly
+          required: false
+          schema:
+            type: string
+        - name: devicePresent
+          in: query
+          description: True if client is able to perform operations on device (default)
+          required: false
+          schema:
+            type: boolean
+        - name: fields
+          in: query
+          description: If set to `all` response will contain a list of service description objects, otherwise only service ID will be returned
+          required: false
+          example: all
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Services or service IDs list (depending on `fields` property )
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/ServiceDescriptionResponse'
+                  - type: array
+                    example: [ install, uninstall ]
+                    items:
+                      type: string
+  /apps/{appId}/recipe-services:
+    get:
+      operationId: getAppRecipeServices
+      tags: [ Management ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Get a list of the services belonging to this appId that have a service recipe
+      description: Returns a list of service identifiers for services defined as a recipe. More unpublished services may exist
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Service IDs list
+          content:
+            application/json:
+              schema:
+                type: array
+                example: [ install, uninstall ]
+                items:
+                  type: string
+                  description: Service identifier
+  /apps/{appId}/logo:
+    put:
+      operationId: putAppLogo
+      tags: [Management]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Set logo for the specified app
+      description: Store an PNG logo for the app, that will be displayed when listing public services or the services installed on a card
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          image/png:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Success
+          content:
+            text/plain:
+              schema:
+                type: string
+        '403':
+          description: Access denied
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Access denied to resource
+    delete:
+      operationId: deleteAppLogo
+      tags: [Management]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Remove the logo for the specified app
+      description: Remove the previously added logo. While on the server the action has close to immediate effect, caching on the client might lead to the logo being visible for quite some time
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            text/plain:
+              schema:
+                type: string
+        '403':
+          description: Access denied
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Access denied to resource
+  /apps/{appId}/description:
+    put:
+      operationId: updateApplicationDescription
+      tags: [ Management ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Set an app description
+      description: "Store a multilanguage title and description for your app. Deprecated: use full application update"
+      deprecated: true
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: Description of the app. Name can be given as a multilanguage string
+          or as a string. The Description may contain basic markdown elements
+          (like emph, links, or bold). The organization is stored as an object
+          with name being currently the only key. Install services is an array
+          of service names that can be used to install the app on a card.
+          Uninstall service is a name of the service that removes app from a
+          card. An optional progress parameter can be specified to indicate
+          the progress made so far in the service delivery process.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppDescription'
+      responses:
+        '200':
+          description: Application information
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "OK"
+        '403':
+          description: Authentication failure
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Authentication failure
+        '404':
+          description: Application not found
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Application not found
+  /apps/{appId}/services/{serviceId}:
+    get:
+      operationId: getServiceDescription
+      tags: [ Management ]
+      summary: Get a service description
+      description: This method is to get a description of what is delivered by a given app id and service id pair. It returns both information regarding the app and the service.
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+        - name: serviceId
+          in: path
+          description: Service ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of associated Application IDs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceDescriptionResponse'
+  /apps/{appId}/services/{serviceId}/recipe:
+    get:
+      operationId: getServiceRecipe
+      tags: [ Management ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Get a service recipe
+      description: Get a previously stored service recipe
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+        - name: serviceId
+          in: path
+          description: Service ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceRecipe'
+        '403':
+          description: Access denied
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Access denied
+        '404':
+          description: Recipe not found
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Recipe not found
+    put:
+      operationId: uploadServiceRecipe
+      tags: [ Management ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Upload a service recipe
+      description: Store a description for a service together with a set of actions for later delivery. A client may afterwards request the service from the Fidesmo server and it will be delivered, without calling the service delivery enpoint, by executing the attached actions
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+        - name: serviceId
+          in: path
+          description: Service ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceRecipe'
+      responses:
+        '200':
+          description: Success
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400':
+          description: Invalid recipe
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Invalid recipe
+        '403':
+          description: Access denied
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Access denied to resource
+    delete:
+      operationId: deleteServiceRecipe
+      tags: [ Management ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Delete a service recipe
+      description: Delete a previously uploaded service recipe. After this operation it won't be possible to start new service deliveries from that recipe, but all already in progress will be able to continue
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+        - name: serviceId
+          in: path
+          description: Service ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            text/plain:
+              schema:
+                type: string
+        '403':
+          description: Access denied
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Access denied
+        '404':
+          description: Recipe not found
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Recipe not found
+  /apps/{appId}/capfiles:
+    get:
+      operationId: listAppCapfiles
+      tags: [ Management ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: List all application CAP files
+      description: List application CAP files by application owner
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CAP files list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapFileMetadata'
+        '404':
+          description: Application not found
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Cap file not found
+    post:
+      operationId: uploadCapfile
+      tags: [ Management ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Upload application CAP file
+      description: Upload application CAP file by application owner. Optionally accepts DAP signature headers in format `DAP-{AID}-{SIGN_ALG}-{HASH_ALG}`
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+        - name: "Java-Card-Version"
+          in: header
+          description: Java card version
+          example: "3.0"
+          required: false
+          schema:
+            type: string
+            enum: [ "2.2" , "2.2.1", "2.2.2", "3.0", "3.0.1", "3.0.4" ]
+        - name: "Global-Platform-Version"
+          in: header
+          description: Global Platform version
+          example: "2.2"
+          required: false
+          schema:
+            type: string
+            enum: [ "2.2" , "2.1.1", "2.2.1" ]
+        - name: "Os-Type-Version"
+          in: header
+          description: OS Type version
+          example: "JCOP 3.0 SECID"
+          required: false
+          schema:
+            type: string
+            enum:
+              - JCOP 2.4.2r1
+              - JCOP 2.4.2r2
+              - JCOP 3.0 EMV
+              - JCOP 3.0 SECID
+              - ST31
+              - Gemalto Optelio G277
+              - NXP JCOP 4 P71
+              - Gemalto GTO 2.0 ST33G1M2
+              - Gemalto GTO 3.0 ST33I1M2
+              - Gemalto GTO 4.0 V9RR
+              - Gemalto GTO 5.0 V9RRP
+              - Idemia PEARL 3.0 SLE97
+              - Idemia PEARL 3.1 SLE97
+              - Idemia PEARL 4.0 SLE97
+              - NXP JCOP 3.1 P61N1M3
+              - NXP JCOP 3.2 P61N1M3
+              - NXP JCOP 3.3 P61N1M3
+              - NXP JCOP 4.0 P73
+              - NXP JCOP 4.1 PN8xT
+              - NXP JCOP 4.5 P71-D600
+              - NXP JCOP 3.3 PN66T
+              - Gemalto GTO 6.0 SEN4
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: CAP file updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElfReceiveSuccess'
+        '201':
+          description: New CAP file created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElfReceiveSuccess'
+        '404':
+          description: Application not found
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Application not found
+  /apps/{appId}/capfiles/{capfileId}:
+    get:
+      operationId: getAppCapfile
+      tags: [ Management ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Get application CAP file by it's ID
+      description: Return CAP file contents and meta information for the owner of application
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+        - name: capfileId
+          in: path
+          description: Capfile identifier
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CAP file contents and meta information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapFileResponse'
+        '404':
+          description: Cap file or application not found
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Cap file not found
+    delete:
+      operationId: deleteAppCapfile
+      tags: [ Management ]
+      security:
+        - token: []
+        - oauth2: []
+      summary: Delete application CAP file by it's ID
+      description: Deletes CAP file by application owner
+      parameters:
+        - name: appId
+          in: path
+          description: Application ID
+          required: true
+          schema:
+            type: string
+        - name: capfileId
+          in: path
+          description: Capfile identifier
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CAP file deleted
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: Cap file or application not found
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Cap file not found
+  /health:
+    get:
+      operationId: healthcheck
+      tags: [ Management ]
+      summary: Health endpoint
+      description: Returns "OK" string if Fidesmo service works normally or "NOK" if any of subsystems is down.
+      responses:
+        '200':
+          description: Service status response
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "OK"
+webhooks:
+  serviceDescriptionRequest:
+    get:
+      description:
+        Request to check that service exists and available and obtain it's description. Performed before starting the actual delivery.
+        The URL is configured for the application.
+        Optionally it is possible to specify a list of fields that client application will request from the user before the delivery start.
+        Responses will be provided in the service delivery request. Fields are not end-to-end encrypted, for encryption the /userInteraction API
+        should be used.
+        It is possible to restrict deliveries to certain devices, possible ways to do it is to specify requirements in the service description itself or
+        to dynamicly check CIN in the query parameters or client headers and return different status codes to indicate that service is not available for
+        the device at the moment. For instance service provider can have multiple public services and dynamically hide them in the application depending on the
+        device or client type.
+      parameters:
+        - name: serviceId
+          in: path
+          description: Service identifier
+          example: "install"
+          required: true
+          schema:
+            type: string
+        - name: cin
+          in: query
+          description: Device identifier. Provided if the service is displayed for a certain device.
+          example: "00112233445566"
+          schema:
+            type: string
+        - name: Fidesmo-Client-Description
+          in: header
+          description: Client description string. Contains information about client type, version, operation system, phone model etc.
+          schema:
+            type: string
+            description: Client description string. Contains information about client type, version, operation system, phone model etc.
+            example: "android/31;Fidesmo/1.5.5/1.15.4;Pixel 6"
+        - name: Fidesmo-Client-Capabilities
+          in: header
+          description: List of client capabilities. Capabilities usually defined by the client SDK or detected by the server.
+          schema:
+            type: array
+            description: List of client capabilities. Capabilities usually defined by the client SDK or detected by the server.
+            example: [ se-access, payment-aid-access ]
+            items:
+              type: string
+              enum: [ se-access, payment-aid-access, app2app ]
+              description: >
+                * `se-access` - Indicates that client is able to access SE. For instance not set for Web client.
+                * `payment-aid-access` - Indicates that client has access to payment SSDs. As iOS limits it 
+                * `app2app` - Client supports a2a authentication
+      responses:
+        '200':
+          description: Service description
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceDescription'
+        '404':
+          description: Service is not known to the service provider
+        '403':
+          description: Service is not available for the device at the moment. For instance the device is not in a desired state.
+  serviceDeliveryStartedRequest:
+    post:
+      description: Called when the client initiates the service delivery process. The URL is configured for the application.
+        After receiving this request service provider is expected to issue operations that will be run on the chip by API enpoints from the ServiceProvider section
+        and passing the sessionId received in this request. After receiving the callback  with the result for operation the next operation can be issued and so on.
+        The last operation should be '/service/completed' that indicates that delivery was completed.
+      parameters:
+        - name: Signature-ES256
+          in: header
+          description: Request body ES256 signature in JWS (RFC-7515) format - Base64URL(Signature R||S). Public key used to verify the signature
+            can be obtained by reading the key id from 'Signature-ES256-Kid' header and obtaining the key using the /certs endpoint. Keys can be cached
+          schema:
+            type: string
+            description: Base64 URL encoded ES256 signature in R||S format of the request body.
+            example: "DtEhU3ljbEg8L38VWAfUAqOyKAM6-Xx-F4GawxaepmXFCgfTjDxw5djxLa8ISlSApmWQxfKTUJqPP3-Kg6NU1Q"
+        - name: Signature-ES256-Kid
+          in: header
+          description: Signature key identifier, that can be obtained from /certs endpoint
+          schema:
+            type: string
+            description: Signature key identifier, that can be obtained from /certs endpoint
+            example: "key-identifier-1"
+      requestBody:
+        description: Service delivery request
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceDeliveryRequest'
+      responses:
+        '200':
+          description: Content is ignored
+        '503':
+          description: Service provider is not available at the moment
+  instanceElementsRequest:
+    get:
+      description: Optional endpoint that returns information about installed assets on the device for a specified CIN. Usually this information is shown by the client
+        when opening application details. Example of such assets are travel tickets that are associated with the device, payment cards, access keys etc.
+      parameters:
+        - name: cin
+          in: path
+          description: Device identifier. Provided if the service is displayed for a certain device.
+          example: "00112233445566"
+          schema:
+            type: string
+          required: true
+      responses:
+        '200':
+          description: Instance elements response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstanceElementsResponse'
+        '201':
+          description: No intance elements are present on the device. Alternative to returning empty list
+        '404':
+          description: Unknown device
+components:
+  securitySchemes:
+    token:
+      type: http
+      scheme: bearer
+      description: JWT token received from /token endpoint
+      bearerFormat: jwt
+    oauth2:
+      type: openIdConnect
+      openIdConnectUrl: https://sso.fidesmo.com/auth/realms/public/.well-known/openid-configuration
+  schemas:
+    TokenRequest:
+      oneOf:
+        - $ref: "#/components/schemas/UserPassTokenRequest"
+        - $ref: "#/components/schemas/ExchangeTokenRequest"
+        - $ref: "#/components/schemas/RefreshTokenRequest"
+    UserPassTokenRequest:
+      type: object
+      description: Used to create an access token from username and password. Can be used to create both short lived session tokens or long lived offline tokens.
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          description: User name
+          example: username
+        password:
+          type: string
+          description: User password
+          example: password
+        accessType:
+          type: string
+          description: Targeted type of access. Use 'session' or empty for getting a session token and 'offline' for a long lived service token.
+          enum: [session, offline]
+          example: session
+          default: session
+        scope:
+          type: array
+          description: Optional subset of space separated scopes used for token. For session tokens it's a standard list of scopes. Offline tokens support specifying user permissions as scopes to reduce possible permissions set. Should be less or equal to what users account already have. By default uses all available permissions of a user.
+          items:
+            type: string
+          example: "app:11223344 aid:A000000031"
+    ExchangeTokenRequest:
+      type: object
+      description: Used to create an access token from ID token, provided by an external ID provider. This request only allows to create short lived session tokens.
+      required: [token, idProvider]
+      properties:
+        token:
+          type: string
+          description: ID token obtained from a specified ID service
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IlRlc3QgdG9rZW4iLCJpYXQiOjE1MTYyMzkwMjJ9.PFTm-boW3qFqEArJBgJFBGsVxMNVui_KHEYwu8rokdY'
+        idProvider:
+          type: string
+          description: Identifier of the ID provider
+          enum: ['google', 'apple']
+          example: google
+    RefreshTokenRequest:
+      type: object
+      description: Used to update refresh token and access token
+      required: [refreshToken]
+      properties:
+        token:
+          type: string
+          description: Refresh token issued previously
+          example: 'e996f86b20ee3cd60f1f608ad772e1c899d115ad'
+    TokenResponse:
+      type: object
+      description: Authentication token response
+      properties:
+        token:
+          type: string
+          description: Token that can be used in Authorization header
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IlRlc3QgdG9rZW4iLCJpYXQiOjE1MTYyMzkwMjJ9.PFTm-boW3qFqEArJBgJFBGsVxMNVui_KHEYwu8rokdY"
+        tokenType:
+          type: string
+          enum: [ bearer ]
+          description: Token type
+    User:
+      type: object
+      description: User information
+      required: [login]
+      properties:
+        login:
+          type: string
+          description: Users login
+          example: "someone"
+        roles:
+          type: array
+          description: List of user roles if any
+          example: ["personalizer"]
+          items:
+            type: string
+        permissions:
+          type: array
+          description: List of user permissions if any
+          example: ["app:11223344", "aid:A00000006170011223344"]
+          items:
+            type: string
+        devices:
+          $ref: '#/components/schemas/UserDevicesListSimple'
+        devicesDescriptions:
+          description: Served instead of 'devices' if request asked for all fields to be include (fields=all)
+          $ref: '#/components/schemas/UserDevicesListFull'
+      oneOf:
+        - required: [devices]
+        - required: [devicesDescriptions]
+    UserDevicesListSimple:
+      type: object
+      description: List of user CINs owned by the user
+      required: []
+      properties:
+          type: array
+          description: Array of CINs
+          items:
+            type: string
+            description: CIN
+          example: [ "00112233445566", "11223344556677" ]
+    UserDevicesListFull:
+      type: object
+      description: List of user devices owned by the user
+      $ref: '#/components/schemas/DeviceDescriptionResponse'
+    DeviceDescriptionResponse:
+      type: object
+      required: [cin, iin, description]
+      cin:
+        type: string
+        description: Card Identifier
+        example: "00007201010398"
+      iin:
+        type: string
+        description: NOT the issuer number, but an id of the perso bureau
+        example : "31045199999906"
+      description:
+        $ref: '#/components/schemas/DeviceDescription'
+      ownedByAccount:
+        type: boolean
+        description: True if device is owned by any user account
+        example: false
+    DeviceDescription:
+      type: object
+      required: [batch, name, capabilities]
+      batch:
+        $ref: '#/components/schemas/DeviceBatch'
+      name:
+        $ref: '#/components/schemas/Translations'
+      description:
+        $ref: '#/components/schemas/Translations'
+      siteUrl:
+        type: string
+        format: uri
+        description: Optional URL to a site page dedicated to device
+      imageUrl:
+        type: string
+        format: uri
+        description: Optional URL to an device image
+      support:
+        type: object
+        description: Optional support information
+        properties:
+          supportEmail:
+            type: string
+            description: Support Email for the device
+            example: 'support@issuer.com'
+          supportUrl:
+            type: string
+            description: Support URL for the device
+            example: 'https://issuer.com/support'
+      capabilities:
+        $ref: '#/components/schemas/CardCapabilities'
+    DeviceBatch:
+      type: object
+      required: [batchId, issuer, persoBureauId]
+      description: Device batch descriptor
+      properties:
+        issuer:
+          type: number
+          format: int64
+          description: Device issuer ID
+        batchId:
+          type: integer
+          description: Device batch ID
+        issuerName:
+          type: string
+          description: Device issuer name
+          example: 'Samsung'
+        persoBureauId:
+          type: string
+          description: Perso bureau
+          example: '999999'
+    CardCapabilities:
+      description: Device capabilities description
+      required: [ platformVersion ]
+      properties:
+        platformVersion:
+          type: number
+          format: int64
+          description: Fidesmo platform version
+        mifareType:
+          type: integer
+          enum: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+          description: |
+            0 - No MIFARE support <br>
+            1 - MIFARE Classic 1K <br>
+            2 - MIFARE Classic 4K <br>
+            3 - MIFARE DESFire 4K EV1 <br>
+            4 - MIFARE DESFire 2K EV1 <br>
+            5 - MIFARE DESFire 8K EV1 <br>
+            6 - MIFARE Plus 2K <br>
+            7 - MIFARE Plus 4K <br>
+            8 - MIFARE DESFire 8K EV3 <br>
+        uidSize:
+          type: integer
+          description: |
+            0 - 4 Bytes <br>
+            1 - 7 Bytes <br>
+            2 - 10 Bytes <br>
+          enum: [0, 1, 2]
+        jcVersion:
+          type: integer
+          description: JavaCard version. 2 bytes (major, minor) packed into single integer number
+        osTypeVersionName:
+          type: string
+          description: Name of the operation system type used in device.
+          example: 'NXP JCOP 5.3'
+        globalPlatformVersion:
+          type: integer
+          description: Global platform version. 2 (major, minor) or 3 (major, minor, patch) bytes version packed into single integer number
+        scpVersion:
+          type: integer
+          description: SCP version used
+          enum: [ 2, 3 ]
+          example: 2
+          default: 2
+    CreateDesfireAppRequest:
+      type: object
+      required: [ aid, amk, keySettings1, keySettings2 ]
+      properties:
+        aid:
+          type: string
+          description: The DESFire Application Id to be created(3-bytes length. Value '000000' is not allowed)
+          example: '000001'
+        amk:
+          type: string
+          description: The new Application Master Key to be set (16-bytes length in case of 2KTDES/AES and 24-bytes for 3KTDES)
+          example: 00112233445566778899AABBCCDDEEFF
+        keySettings1:
+          type: string
+          description: KeySettings 1
+          example: 0F
+        keySettings2:
+          type: string
+          description: KeySettings 2
+          example: 8D
+        progress:
+          $ref: '#/components/schemas/DeliveryProgress'
+    DeleteDesfireAppRequest:
+      type: object
+      required: [ aid, amk ]
+      properties:
+        aid:
+          type: string
+          description: The DESFire Application Id to be deleted(3-bytes length. Value '000000' is not allowed)
+          example: '000001'
+        amk:
+          type: string
+          description: The Application Master Key (16-bytes length in case of 2KTDES/AES and 24-bytes for 3KTDES). It will be used for checking the request performer ownership over the application
+          example: 00112233445566778899AABBCCDDEEFF
+        progress:
+          $ref: '#/components/schemas/DeliveryProgress'
+    TransceiveDESFireRequest:
+      type: object
+      required: [ commands ]
+      properties:
+        commands:
+          type: array
+          description: Commands to execute
+          example: [ "11223344" ]
+          items:
+            type: string
+        resetSession:
+          type: boolean
+          description: True if session needs to be reset before sending a commands sequence
+          default: false
+          example: false
+        progress:
+          $ref: '#/components/schemas/DeliveryProgress'
+    DeliveryProgress:
+      type: object
+      description: Optional object describing current delivery step and it's position in the total delivery progress
+      required: [ currentStep, totalSteps ]
+      properties:
+        currentStep:
+          type: integer
+          description: Current delivery step number
+        totalSteps:
+          type: integer
+          description: Total delivery steps number
+        message:
+          description: Optional delivery step description
+          $ref: '#/components/schemas/Translations'
+        image:
+          type: string
+          description: Optional URL to an image describing delivery step
+        estimatedDuration:
+          type: integer
+          description: Estimated step duration in seconds
+      example:
+        currentStep: 4
+        totalSteps: 6
+        message: Installing applet
+        image: http://imgurl.com/applet-installation.png
+        estimatedDuration: 5
+    SecurityLevelOption:
+      type: object
+      description: It allows specifying the SecurityLevel required for running some SecureTransceive operation
+      enum: [ NoSecurityLevel(0x00), CMac(0x01), CDecryption(0x02), RMac(0x10), REncryption(0x20), AnyAuthenticated(0x40), Authenticated(0x80) ]
+      properties:
+        value: Byte representation of the flag
+    OperationAccepted:
+      type: object
+      required: [ operationId ]
+      properties:
+        operationId:
+          type: string
+          example: "2787F3F2-CEDA-4BED-9C47-D5A6965A532F"
+          description: UUID of the accepted operation
+    OperationSuccess:
+      type: object
+      required: [ operationId ]
+      properties:
+        operationId:
+          type: string
+          example: "2787F3F2-CEDA-4BED-9C47-D5A6965A532F"
+          description: UUID of the accepted operation
+        sessionId:
+          type: string
+          example: "2787F3F2-CEDA-4BED-9C47-D5A6965A532F"
+          description: UUID of the accepted operation
+        statusCode:
+          type: number
+          description: HTTP status code indicating if operation was successful
+          example: 200
+        operationType:
+          type: string
+          example: generic
+          description: Type of the operation that was performed. Some operations might have additional fields
+          enum: [ 'generic', 'transceive', 'user-interaction', 'action', 'desfire', 'uid' ]
+    TransceiveSuccess:
+      type: object
+      required: [ operationId. responses ]
+      properties:
+        operationId:
+          type: string
+          example: "2787F3F2-CEDA-4BED-9C47-D5A6965A532F"
+          description: UUID of the accepted operation
+        sessionId:
+          type: string
+          example: "2787F3F2-CEDA-4BED-9C47-D5A6965A532F"
+          description: UUID of the accepted operation
+        statusCode:
+          type: number
+          description: HTTP status code indicating if operation was successful
+          example: 200
+        responses:
+          type: array
+          description: List of APDU responses in the same order as commands were sent
+          example: [ "9000", "9000" ]
+          items:
+            type: string
+        operationType:
+          type: string
+          example: generic
+          description: Type of the operation that was performed. 'transceive' in this case
+          enum: [ 'transceive' ]
+    UserInteractionSuccess:
+      type: object
+      required: [ operationId ]
+      properties:
+        operationId:
+          type: string
+          example: "2787F3F2-CEDA-4BED-9C47-D5A6965A532F"
+          description: UUID of the accepted operation
+        sessionId:
+          type: string
+          example: "2787F3F2-CEDA-4BED-9C47-D5A6965A532F"
+          description: UUID of the accepted operation
+        statusCode:
+          type: number
+          description: HTTP status code indicating if operation was successful
+          example: 200
+        operationType:
+          type: string
+          description: Type of the operation that was performed. 'user-interaction' in this case
+          enum: [ 'user-interaction' ]
+        ephemeralKey:
+          type: string
+          description: HEX of ephemeral key used to encrypt fields, encrypted itself by a service description public key. Only present if encryption was requested in operation
+        response:
+          type: object
+          description: A map of field ID and user input. If encryption was requested value is a HEX of encrypted user input
+          example: { "fieldId": "User input" }
+    Translations:
+      type: object
+      required: [ id, text ]
+      properties:
+        id:
+          description: Identifier of the message to be shown to the user. It can be used by client apps to build their own messages, as it allows to identify the message intent.
+          type: string
+          example: "fidesmo-pay.statuses.emailChangeComplete"
+        text:
+          description: Text of message in the client app language. If no language is set for the client then English is used. The message can include parametrized elements which are set by numbers between curly braces ({0}, {1}, {2}...)
+          type: string
+          example: "The email address for the wearable has been changed to: {0}"
+        params:
+          description: Values to replace the parameters in the text with. The first element in the array corresponds with parameter {0}, the second one with parameter {1}, and so forth.
+          type: array
+          items:
+            type: string
+            example: "some.mail@some.domain.com"
+          example: [some.mail@some.domain.com]
+    CcmInstall:
+      type: object
+      required: [ id, module, application ]
+      description: Information needed to register the application on the card and make it selectable.
+      properties:
+        id:
+          description: AID or LFDBH of the CAP file to install (alternatively called ''executableLoadFile''). Type of field is defined by `searchBy` field, but set to AID by default.
+          type: string
+          example: A00000061700E26B8F120101
+        module:
+          description: AID of the applet to instantiate (alternatively called ''executableModule'')
+          type: string
+          example: A00000061700E26B8F120101
+        application:
+          description: AID of the applet instance created.
+          type: string
+          example: A00000061700E26B8F120101
+        parameters:
+          description: 'Install parameters that will be passed to the new instance, encoded as hexadecimal string. Do not include the C9 tag and length.'
+          type: string
+          example: '01020304'
+        searchBy:
+          type: string
+          description: Indicates how to retrieve (if necessary) the CAP file, based on the ''id'' field
+          enum: [ 'aid', 'lfdbh' ]
+          example: aid
+          default: aid
+        extraditeTo:
+          $ref: '#/components/schemas/SsdInfo'
+        encryptLoad:
+          type: boolean
+          description: If false it will transfer the load file in clear text while still sending any install parameters encrypted.
+          example: false
+        selectable:
+          type: boolean
+          description: indicates if the applet instance will be selectable after installation
+          example: true
+        araHashes:
+          description: List of additional hashes of an app signature (along with Fidesmo Android hash), to be loaded into the Access Control subsystem
+          type: array
+          items:
+            type: string
+            description: Additional ARA hash of an app signature (along with Fidesmo Android hash), to be loaded into the Access Control subsystem
+            example: 0122334455667788990011223344556677889900
+        nfcSelectable:
+          type: boolean
+          description: flag, to decide if an applet can be accessed through the contactless interface. Only makes sense in eSEs (default true)
+          example: true
+          default: true
+        progress:
+          $ref: '#/components/schemas/DeliveryProgress'
+        allowNfcReconnection:
+          type: boolean
+          description: Optional boolean. If set to true, indicates client that the NFC session can be reset.
+    SsdInfo:
+      type: object
+      description: identifier of the security domain where the applet instance will be extradited (if necessary)
+      properties:
+        aid:
+          type: string
+          description: SSD AID - It might be a Fidesmo-prefixed AID (which ends with appId 4 bytes) or a custom AID
+          example: A00000061700E26B81111111
+        dapKey:
+          type: string
+          description: Optional DAP key in case the SSD had DAP Verification enabled.
+          example: 00112233445566778899AABBCCDDEEFF
+        scpVersion:
+          type: number
+          description: explicit SCP version supported by the SSD (in case the device has support for multiple versions)
+          example: 2
+    CcmDelete:
+      type: object
+      description: Information about the application being deleted.
+      required: [ application, withRelated ]
+      properties:
+        application:
+          description: AID of applet instance to delete
+          type: string
+          example: A00000061700E26B8F120101
+        withRelated:
+          type: boolean
+          example: false
+          default: false
+        progress:
+          $ref: '#/components/schemas/DeliveryProgress'
+        allowNfcReconnection:
+          type: boolean
+          description: Optional boolean. If set to true, indicates client that the NFC session can be reset.
+    CcmPersonalize:
+      type: object
+      description: Data and parameters to personalize application
+      required: [ application, data ]
+      properties:
+        application:
+          description: AID of applet instance to personalize
+          type: string
+          example: A00000061700E26B8F120101
+        chaining:
+          type: string
+          description: 'Controls APDU block chaining in P2. If set to ''dataset'' (default) uses global block numbering for whole data, when set to ''tag'' block numbering will be separate for each DGI or TLV'
+          enum: [ "tag", "dataset" ]
+          example: tag
+          default: dataset
+        encoding:
+          type: string
+          description: indicates the structure of the outgoing APDU commands data field (DGI, TLV or other)
+          enum: [ "dgi", "tlv", "other" ]
+          example: other
+          default: other
+        decoding:
+          type: string
+          description: indicates the structure of the incoming data sequence (currently only DGI sequence)
+          enum: [ "dgi" ]
+          example: dgi
+          default: dgi
+        blockEncoding:
+          type: string
+          description: indicates how DGI store data apdus will be generated, either in a standard way or by prefixing length in case of long DGI data
+          enum: [ "standard", "extendedLength" ]
+          example: standard
+          default: standard
+        data:
+          type: string
+          description: Multiple personalization tags as a single HEX string
+          example: 7001290104BFFF2049020102030800000000000000FF040A7520000000000000001005046069018006020212800110ED83C91B1F2614EE35DC0305B618CFC58003433041020100301306072A8648CE3D020106082A8648CE3D030107042730250201010420A096F575423FD8C6F33CDFE8D80EC539B938A3E3120EB931AC324B80CD496989
+        encrypt:
+          type: array
+          description: List of tags that have to be encrypted and optional padding parameters
+          items:
+            $ref: '#/components/schemas/CcmStoreDataEncryptTag'
+        applicationSsd:
+          description: Optional information about the application SSD in case it's featured by some special trait like custom AID
+          $ref: '#/components/schemas/SsdInfo'
+        progress:
+          $ref: '#/components/schemas/DeliveryProgress'
+        installForPerso:
+          type: string
+          enum: [ notSet, install, installNotSelectable ]
+          example: notSet
+          default: notSet
+          description: >
+            If set to install, it will use install for perso after authenticating against the applet-associated security domain instead of personalization 
+            authenticating against the applet directly and will make applet selectable. The `installNotSelectable` does the same install for perso but without 
+            running 'install and make selectable' afterwards (the applet maybe is still selectable if the previous ccm/install op that installed it had the flag `selectable = true`).
+        finish:
+          type: boolean
+          description: flag, to decide if the generated APDUs should have the 0x80 flag set at the end to indicate the end of the command sequence (or not set if false)
+          example: true
+          default: true
+        allowNfcReconnection:
+          type: boolean
+          description: Optional boolean. If set to true, indicates client that the NFC session can be reset.
+    CcmStoreDataEncryptTag:
+      type: object
+      required:
+        - tag
+      properties:
+        tag:
+          type: string
+          description: Tag that has to be encrypted
+          example: '8003'
+        pad:
+          type: boolean
+          description: true if encrypted tag also has to be padded
+          default: false
+          example: true
+        zmkEncrypted:
+          type: boolean
+          description: true if tag is already ZMK encrypted.
+          default: false
+          example: false
+      example:
+        - tag: '8001'
+          pad: false
+        - tag: '8003'
+          pad: true
+    CcmLoad:
+      type: object
+      description: Operation to load an ELF from a CAP file already stored in the backend infrastructure
+      required:
+        - id
+      properties:
+        id:
+          description: Identifier for retrieving the CAP file to load. Either AID or LFDBH or a CAP file, the type of identifier is indicated by the parameter 'searchBy'
+          type: string
+          example: A00000061702A59F0001
+        searchBy:
+          description: "Indicates how to retrieve the CAP file: either by the AID ('aid', default) or by the load file hash ('lfdbh')"
+          type: string
+          enum: [ "aid", "lfdbh" ]
+          example: aid
+        encrypt:
+          description: Indicates if the payload of the operation has to be encrypted. Default is 'true'
+          type: boolean
+          example: true
+        customSsd:
+          $ref: "#/components/schemas/SsdInfo"
+        progress:
+          $ref: "#/components/schemas/DeliveryProgress"
+        allowNfcReconnection:
+          type: boolean
+          description: Optional boolean. If set to true, indicates client that the NFC session can be reset.
+    CcmStoreData:
+      type: object
+      description: Data and parameters to personalize application
+      required: [ application, data, tagType ]
+      properties:
+        application:
+          description: AID of applet instance to personalize
+          type: string
+          example: A00000061700E26B8F120101
+        tagType:
+          type: string
+          description: 'Optional type of a tag. Only DGI is supported for now.'
+          enum:
+            - DGI
+          example: DGI
+        chaining:
+          type: string
+          description: 'Controls APDU block chaining in P2. If set to ''dataset'' (default) uses global block numbering for whole data, when set to ''tag'' block numbering will be separate for each DGI or TLV'
+          enum:
+            - tag
+            - dataset
+          example: tag
+          default: dataset
+        data:
+          type: string
+          description: Multiple personalization tags as a single HEX string
+          example: 7001290104BFFF2049020102030800000000000000FF040A7520000000000000001005046069018006020212800110ED83C91B1F2614EE35DC0305B618CFC58003433041020100301306072A8648CE3D020106082A8648CE3D030107042730250201010420A096F575423FD8C6F33CDFE8D80EC539B938A3E3120EB931AC324B80CD496989
+        encrypt:
+          type: array
+          description: List of tags that have to be encrypted and optional padding parameters
+          items:
+            $ref: '#/components/schemas/CcmStoreDataEncryptTag'
+        applicationSsd:
+          description: Optional information about the application SSD in case it's featured by some special trait like custom AID
+          $ref: '#/components/schemas/SsdInfo'
+        progress:
+          $ref: '#/components/schemas/DeliveryProgress'
+        allowNfcReconnection:
+          type: boolean
+          description: Optional boolean. If set to true, indicates client that the NFC session can be reset.  
+    Transceive:
+      type: object
+      description: Specifies a list of APDU commands to be run on SE during delivery
+      properties:
+        commands:
+          description: List of APDU commands
+          type: array
+          items:
+            type: string
+            description: APDU command as HEX string
+            example: "00A4040000"
+        keepOpen:
+          description: If set server delivery considers delivery as failed if between two such operations connection to SE was lost
+          type: boolean
+          default: false
+        waitingMessage:
+          type: string
+          description: Optional message that client may show between operations after this one
+          example: "Please wait while server is processing your data"
+        progress:
+          $ref: '#/components/schemas/DeliveryProgress'
+        allowNfcReconnection:
+          type: boolean
+          description: Optional boolean. If set to true, indicates client that the NFC session can be reset.
+    SecureTransceiveRequest:
+      type: object
+      description: Specifies a list of APDU commands to be run securely in an SCP channel to the specified application
+      properties:
+        application:
+          description: Application AID to establish secure channel to before executing commands. It must be present in allowed RIDs list.
+          type: string
+          example: "A00000061700E26B8F12"
+        commands:
+          description: List of APDU commands
+          type: array
+          items:
+            type: string
+            description: APDU command as HEX string
+            example: "00A4040000"
+        resetSession:
+          description: By default server keeps secure connection open between multiple secure transceive operations. This flag forces server to re-establish the channel.
+          type: boolean
+          default: false
+          example: false
+        waitingMessage:
+          type: string
+          description: Optional message that client can to show between operations after this one
+          example: "Please wait while server processing your data"
+        progress:
+          $ref: '#/components/schemas/DeliveryProgress'
+        isExtradited:
+          type: boolean
+          description: Optional boolean. If set to true, it indicates that the applet instance is extradited to a custom SSD and the secure channel will be established to that SSD.
+        securityLevel:
+          $ref: '#/components/schemas/SecurityLevelOption'
+        allowNfcReconnection:
+          type: boolean
+          description: Optional boolean. If set to true, indicates client that the NFC session can be reset.
+    ServiceStatus:
+      type: object
+      required: [ success, message ]
+      properties:
+        status:
+          type: string
+          enum: [ ok, error, cancelled, rejected ]
+          description: >
+            Indicates delivery status. Used for accounting also impacts the application status after delivery. Supported statuses:
+             * `ok` - Delivery succeeded
+             * `cancelled` - Delivery cancelled by user
+             * `rejected` - Delivery was rejected by service. For instance service is not allowed for the user account.
+             * `error` - Other error during delivery
+        message:
+          description: Text to show to user after delivery finished
+          example: "Delivery was successful"
+          $ref: '#/components/schemas/Translations'
+        progress:
+          $ref: '#/components/schemas/DeliveryProgress'
+        instanceElements:
+          type: array
+          description: Optional descriptions of components installed on the chip
+          items:
+            $ref: '#/components/schemas/InstanceElement'
+        metadata:
+          type: object
+          description: Optional key value pairs specific for the service provider that can be used for accounting or support.
+          example: { 'provider-id': '12345678' }
+        clientMetadata:
+          type: object
+          description: Optional key value pairs specific for the service provider. Can be used to pass any service specific data to the client.
+          example: { 'account-type': 'internal' }
+        error:
+          type: string
+          description: Optional error description that can be used for support or debugging
+    InstanceElementsResponse:
+      type: object
+      required: [ instanceElements ]
+      properties:
+        instanceElements:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstanceElement'
+    InstanceElement:
+      type: object
+      properties:
+        image:
+          type: string
+          description: Component image URL (for instance credit card image)
+        description:
+          description: Component description text in Markdown
+          $ref: '#/components/schemas/Translations'
+      example:
+        image: http://imgurl.com/ticket.png
+        description: You got 1 Ticket
+    UserInteraction:
+      anyOf:
+        - $ref: '#/components/schemas/UserInteractionFields'
+        - $ref: '#/components/schemas/UserInteractionActions'
+      example:
+        fields:
+          - { "label" : "Enter your email", "id" : "text", "type": "edit", "format" : "email" }
+    UserInteractionFields:
+      type: object
+      description: Specifies fields that needs to be shown on the client
+      properties:
+        fields:
+          description: List of fields
+          type: array
+          items:
+            $ref: '#/components/schemas/Field'
+        waitingMessage:
+          type: string
+          description: Optional message that client may show between operations after this one
+          example: "Please wait while server is processing your data"
+        encrypted:
+          type: boolean
+          description: If true, forces client to encrypt the fields
+          example: false
+          default: false
+        progress:
+          $ref: '#/components/schemas/DeliveryProgress'
+    UserInteractionActions:
+      type: object
+      description: Specifies list of actions to be performed on client
+      properties:
+        actions:
+          description: List of actions
+          type: array
+          items:
+            $ref: '#/components/schemas/UiAction'
+        waitingMessage:
+          type: string
+          description: Optional message that client can to show between operations after this one
+          example: "Please wait while server processing your data"
+        progress:
+          $ref: '#/components/schemas/DeliveryProgress'
+    UiAction:
+      type: object
+      required: [description, name, parameters]
+      properties:
+        description:
+          description: Action description text
+          $ref: '#/components/schemas/Translations'
+        name:
+          type: string
+          description: Action name
+          enum: [ phonecall, open-android-app ]
+        parameters:
+          type: object
+          description: Generic action parameters
+    Field:
+      type: object
+      required: [ label, id, type ]
+      description: UI field for the client shown to the customer before or during delivery. Most of fields require user input,
+        but there are read only fields, like `text` or `image` that are used to display information instead.
+        Only common field formats are described here, but it could be extended and changed once agreed with client and
+        service provider. If a field has multiple values (like `option` field) multiple values should be specified
+        in label separated by `\n`.
+      properties:
+        label:
+          description: Label to show along with a field
+          $ref: '#/components/schemas/Translations'
+        id:
+          type: string
+          description: Field identifier that client should use to provide users response
+          example: "email"
+        type:
+          type: string
+          description: Field type. Specifies how to render the field to the client
+          enum:
+            - text
+            - image
+            - paymentcard
+            - edit
+            - option
+        format:
+          type: string
+          description: Optional field format that helps client to render and validate field. If not supported client, it's supposed to fallback to most generic field
+          enum:
+            - mastercard
+            - maestro
+            - visa
+            - text
+            - number
+            - msisdn
+            - email
+            - button
+    App:
+      type: object
+      description: Application descriptor
+      required: [ appId, name, organization, logo, services, installServices ]
+      properties:
+        appId:
+          type: string
+          description: Application ID
+          example: 34ab5711
+        name:
+          description: Application name
+          allOf:
+            - $ref: '#/components/schemas/Translations'
+        organization:
+          type: object
+          description: Organization that owns application
+          properties:
+            name:
+              type: string
+              example: ExampleOrg
+              description: Organization name
+        description:
+          $ref: '#/components/schemas/Translations'
+        installServices:
+          type: array
+          description: List of services to install application
+          items:
+            type: string
+            description: Service ID
+            example: "install"
+        uninstallService:
+          type: string
+          description: Service ID to uninstall application
+          example: "uninstall"
+        suspendService:
+          type: string
+          description: Service ID to suspend application
+          example: "suspend"
+        unsuspendService:
+          type: string
+          description: Service ID to unsuspend application
+          example: "unsuspend"
+        logo:
+          type: string
+          description: Application logo full URL
+          example: http://images.com/logo.svg
+        currency:
+          type: string
+          description: Currency code to use for payment
+          example: EUR
+        services:
+          type: array
+          description: Full list of services published for this application
+          example: [ "install", "uninstall", "suspend", "unsuspend" ]
+          items:
+            type: string
+            description: Service ID
+    StoredApp:
+      type: object
+      description: Application full descriptor
+      required: [ appId, name, organization, logo, services, installServices ]
+      properties:
+        appId:
+          type: string
+          description: Application ID
+          example: 34ab5711
+        name:
+          description: Application name
+          allOf:
+            - $ref: '#/components/schemas/Translations'
+        organization:
+          type: object
+          description: Organization that owns application
+          properties:
+            name:
+              type: string
+              description: Organization name
+        description:
+          $ref: '#/components/schemas/Translations'
+        installServices:
+          type: array
+          description: List of services to install application
+          items:
+            type: string
+            description: Service ID
+            example: "install"
+        uninstallService:
+          type: string
+          description: Service ID to uninstall application
+          example: "uninstall"
+        suspendService:
+          type: string
+          description: Service ID to suspend application
+          example: "suspend"
+        unsuspendService:
+          type: string
+          description: Service ID to unsuspend application
+          example: "unsuspend"
+        requirements:
+          $ref: '#/components/schemas/Requirements'
+          description: "Changes application requirements. This is not related to service requirements and only impacts application visibility in published apps list for specific device types"
+        logo:
+          type: string
+          description: Application logo full URL
+          example: http://images.com/logo.svg
+        services:
+          type: array
+          description: Full list of services published for this application. Used to display services buttons when opening the application. The application might still have any number of unpublished services available for manual delivery
+          example: [ "install", "uninstall", "suspend", "unsuspend" ]
+          items:
+            type: string
+            description: Service ID
+        priority:
+          type: integer
+          default: 1000
+          example: 1000
+          description: Application priority that defines sorting order in applications list. Can only be changed by Fidesmo administrator accounts.
+        serviceDeliveryUri:
+          type: string
+          example: http://service.com/deliver
+          description: URL used to deliver an application service. Uses recipes if not specified
+        serviceDescriptionUri:
+          type: string
+          example: http://service.com/describe
+          description: URL used to obtain services description. Uses recipes if not specified
+        instanceElementsUri:
+          type: string
+          example: http://service.com/instance-elements
+          description: URL used to obtain application specific instances installed on a specific device
+        extraPermissions:
+          type: array
+          description:
+            "By default the application can only access AIDs with prefixes A00000061700XXXXXXXX and A00000061701XXXXXXXX, 
+            where XXXXXXXX is the application ID. To access any other AID prefixes or extended platform features an appropriate set of permissions have to be added to this list.
+            The format for AID prefix permission is 'aid:A000000617' - that allows to access any AID starting with A000000617.
+            Application owner is allowed to add prefixes that are allowed to the owner account itself (can be checked with /user endpoint)"
+          example: [ "aid:A000000617", "aid:A000000001", "logicalChannels:1,2" ]
+          items:
+            type: string
+            description: Application permissions
+        state:
+          type: string
+          description:
+            Application publishing state in store. Published makes application public, development and
+            demo visible only when development mode is on and unpublished apps aren't visible in the applications list.
+            Application owner can unpublish the application, but other changes to the application state requires an Fidesmo administator role.
+          default: "UNPUBLISHED"
+          enum: [ "UNPUBLISHED", "DEMO", "DEVELOPMENT", "PUBLISHED" ]
+        metadata:
+          type: object
+          description: Additional application metadata containing free form settings.
+    ServiceDescriptionResponse:
+      type: object
+      description: Service description response
+      required: [ serviceId, description ]
+      properties:
+        serviceId:
+          type: string
+          description: Service ID
+          example: "install"
+        app:
+          $ref: '#/components/schemas/App'
+        description:
+          $ref: '#/components/schemas/ServiceDescription'
+    ServiceDescription:
+      type: object
+      description: Service description
+      required: [ title ]
+      properties:
+        title:
+          description: Human readable service name
+          $ref: '#/components/schemas/Translations'
+        description:
+          $ref: '#/components/schemas/Translations'
+        confirmationRequired:
+          type: boolean
+          deprecated: true
+        emailRequired:
+          description: Set if user have to enter email before delivery, contains translated text that will be shown to user
+          allOf:
+            - $ref: '#/components/schemas/Translations'
+          deprecated: true
+        termsAndConditions:
+          type: string
+          description: URL to terms and conditions that will be shown by the client before service delivery
+        msisdnRequired:
+          description: Set if user have to enter phone number before delivery, contains translated text that will be shown to user
+          allOf:
+            - $ref: '#/components/schemas/Translations'
+          deprecated: true
+        fieldsRequired:
+          type: array
+          description: List of fields that user will be asked to fill in before delivery started. Results will be sent to service provider in delivery request.
+          items:
+            $ref: '#/components/schemas/Field'
+        requirements:
+          $ref: '#/components/schemas/Requirements'
+          description: "Sets service requirements. Service delivery will be forbidden for non mathing devices and service will be automatically hidden"
+        certificate:
+          type: string
+          description: Optional certificate with RSA public key in HEX format that can be used to send encrypted fields during delivery
+        totalSteps:
+          type: integer
+          description: Optional total number of delivery steps that allows client to show delivery progress
+          example: 4
+    ServiceDeliveryRequest:
+      type: object
+      description: Service delivery request
+      required: [ sessionId, serviceId, cardId ]
+      properties:
+        sessionId:
+          type: string
+          description: Session ID that has to be passed in headers for all calls outgoing from the service provider
+          example: B8410883-FB37-47D8-BB7A-E795C05BA44C
+        serviceId:
+          type: string
+          description: Service ID
+          example: install
+        cardId:
+          type: object
+          required: [ cin, iin ]
+          properties:
+            cin:
+              type: string
+              description: Fidesmo Device identifier in HEX format (CIN)
+              example: "00112233445566"
+            iin:
+              type: string
+              description: Card Issuer identifier number in HEX
+              example: "11223344556600"
+        fields:
+          type: object
+          description: Fields requested by `fieldsRequired` in the service description, represented as a map fieldId -> User input
+          example: { "accountName": "user123" }
+        clientInfo:
+          type: object
+          required: [description, capabilities]
+          properties:
+            description:
+              type: string
+              description: Client description string. Contains information about client type, version, operation system, phone model etc.
+              example: "android/31;Fidesmo/1.5.5/1.15.4;Pixel 6"
+            capabilities:
+              type: array
+              description: List of client capabilities. Capabilities usually defined by the client SDK or detected by the server.
+              example: [ se-access, payment-aid-access ]
+              items:
+                type: string
+                enum: [ se-access, payment-aid-access, app2app ]
+                description: >
+                  Sort order:
+                  * `se-access` - Indicates that client is able to access SE. For instance not set for Web client.
+                  * `payment-aid-access` - Indicates that client has access to payment SSDs. As iOS limits it 
+                  * `app2app` - Client supports a2a authentication
+            ip:
+              type: string
+              description: Client IP address
+              example: '18.24.13.5'
+            languages:
+              type: string
+              description: Customers preffered language which will be used to communicate with the customer. Format as described in [rfc3282](https://tools.ietf.org/html/rfc3282)
+              example: 'fr-CH, fr;q=0.9, en;q=0.8, de;q=0.7, *;q=0.5'
+    AppDescription:
+      type: object
+      description: Application general description
+      required: [ name, organization ]
+      properties:
+        name:
+          $ref: '#/components/schemas/Translations'
+        organization:
+          type: object
+          description: Organization that owns application
+          properties:
+            name:
+              type: string
+              description: Organization name
+        description:
+          $ref: '#/components/schemas/Translations'
+        installServices:
+          type: array
+          description: List of services to install application
+          items:
+            type: string
+            description: Service ID
+            example: "install"
+        uninstallService:
+          type: string
+          description: Service ID to uninstall application
+          example: "uninstall"
+        suspendService:
+          type: string
+          description: Service ID to suspend application
+          example: "suspend"
+        unsuspendService:
+          type: string
+          description: Service ID to unsuspend application
+          example: "unsuspend"
+        requirements:
+          $ref: '#/components/schemas/Requirements'
+    ServiceRecipe:
+      type: object
+      description: Service recipe
+      required: [ description, successMessage, failureMessage ]
+      properties:
+        description:
+          $ref: '#/components/schemas/ServiceDescription'
+        successMessage:
+          $ref: '#/components/schemas/Translations'
+        failureMessage:
+          $ref: '#/components/schemas/Translations'
+        serviceCheckUri:
+          type: string
+          description: Optional validation URL that will be called before recipe delivery (PUT with service delivery request). Any 2xx status means that validation passed.
+        serviceResultUri:
+          type: string
+          description: Optional https or mailto URL that will get a POST request or email with the delivery summary
+        actions:
+          type: array
+          description: List of recipe actions
+          items:
+            type: object
+            properties:
+              endpoint:
+                type: string
+                description: Fidesmo API URL
+                example: "/ccm/install"
+              content:
+                example: {
+                  "id": "A00000061700E26B8F12",
+                  "module": "A00000061700E26B8F1201",
+                  "application": "A00000061700E26B8F120101",
+                  "parameters": "01020304",
+                  "encryptLoad": false,
+                  "progress": {
+                    "currentStep": 3,
+                    "totalSteps": 5,
+                    "message": {
+                      "en": "Gathering information",
+                      "es": "Extrayendo información"
+                    },
+                    "image": "https://via.placeholder.com/350x150",
+                    "estimatedDuration": 15
+                  }
+                }
+                anyOf:
+                  - $ref: '#/components/schemas/CcmInstall'
+                  - $ref: '#/components/schemas/CcmLoad'
+                  - $ref: '#/components/schemas/CcmPersonalize'
+                  - $ref: '#/components/schemas/CcmStoreData'
+                  - $ref: '#/components/schemas/UserInteraction'
+                  - $ref: '#/components/schemas/SecureTransceiveRequest'
+                  - $ref: '#/components/schemas/Transceive'
+                  - $ref: '#/components/schemas/DeleteDesfireAppRequest'
+                  - $ref: '#/components/schemas/CreateDesfireAppRequest'
+                  - $ref: '#/components/schemas/TransceiveDESFireRequest'
+    ElfReceiveSuccess:
+      type: object
+      description: Capfile uploading result
+      required: [ executableLoadFile, executableModules, id ]
+      properties:
+        id:
+          type: string
+          description: Uploaded file ID (SHA-256 hash)
+        executableLoadFile:
+          type: string
+          description: ELF AID
+        executableModules:
+          type: array
+          description: List of Executable modules AIDs
+          items:
+            type: string
+    CapFileMetadata:
+      type: object
+      description: CAP file metadata, similar to CapFileResponse but without cap file itself
+      required: [ appId, id, elfAid, javaCardVersion, metadata, locationType ]
+      properties:
+        appId:
+          type: string
+          description: Application ID
+          example: 34ab5711
+        id:
+          type: string
+          description: CAP file identifier
+          example: d5d95b581e4b4a90b56c72464fe0e84b4076c79671a745fcb6e9a6086574b01c
+        elfAid:
+          type: string
+          description: ELF file AID
+          example: "A00000061700FFFFFFFF"
+        javaCardVersion:
+          type: string
+          description: Java card version
+          example: "2.2.2"
+        metadata:
+          type: object
+          description: CAP file metadata provided during upload or derived from CAP itself, GlobalPlatform version, OS Type version, DAP verification signatures etc.
+          example: { "gp-version": "2.2", "otv-version": "JCOP 2.4.2r1" }
+        locationType:
+          type: string
+          description: CAP file location, `preloaeded` means that ELF is preloaded on the chip and LOAD commands should be skipped
+          enum: [ cap, preloaded ]
+    CapFileResponse:
+      type: object
+      description: Response with CAP file data and metadata
+      required: [ appId, id, elfAid, javaCardVersion, metadata, locationType ]
+      properties:
+        appId:
+          type: string
+          description: Application ID
+          example: 34ab5711
+        id:
+          type: string
+          description: CAP file identifier
+          example: d5d95b581e4b4a90b56c72464fe0e84b4076c79671a745fcb6e9a6086574b01c
+        elfAid:
+          type: string
+          description: ELF file AID
+          example: "A00000061700FFFFFFFF"
+        javaCardVersion:
+          type: string
+          description: Java card version
+          example: "2.2.2"
+        metadata:
+          type: object
+          description: CAP file metadata provided during upload or derived from CAP itself, GlobalPlatform version, OS Type version, DAP verification signatures etc.
+          example: { "gp-version": "2.2", "otv-version": "JCOP 2.4.2r1" }
+        locationType:
+          type: string
+          description: CAP file location, `preloaeded` means that ELF is preloaded on the chip and LOAD commands should be skipped
+          enum: [ cap, preloaded ]
+        data:
+          type: string
+          description: HEX of CAP file contents. Empty for preloaded CAP files
+    ClientReleaseInfo:
+      type: object
+      description: Information about the client release
+      required: [ android, iphone, lastestRelease, version ]
+      properties:
+        android:
+          type: object
+          description: Android version of the client
+          example: {
+            "latestRelease": {
+              "version": "2.0.1"
+            },
+            "latestOptional": {
+              "version": "1.8.0",
+              "message": {
+                "en": "We recommend you update your app.",
+                "es": "Te recomendamos actualizar tu aplicación."
+              }
+            },
+            "latestMandatory": {
+              "version": "1.0.3",
+              "message": {
+                "en": "Please update your Fidesmo App.",
+                "es": "Por favor, actualiza la aplicación Fidesmo."
+              }
+            }
+          }
+        iphone:
+          type: object
+          description: iOS version of the client
+          example: {
+            "latestRelease": {
+              "version": "3.4.5"
+            },
+            "latestOptional": {
+              "version": "3.2.0",
+              "message": {
+                "en": "We recommend you update your app!",
+                "es": "Te recomendamos actualizar tu aplicación."
+              }
+            },
+            "latestMandatory": {
+              "version": "2.12.3",
+              "message": {
+                "en": "Please update your Fidesmo App.",
+                "es": "Por favor, actualiza la aplicación Fidesmo."
+              }
+            }
+          }
+    Requirements:
+      type: object
+      description: Requirements that device should satisfy in order to perform a successful service delivery
+      properties:
+        fixedUid:
+          type: string
+          default: any
+          description: Device required to use UIDs of scecified size
+          enum: [ 4byte, 7byte, 10byte, any ]
+          example: "7byte"
+        mifare:
+          type: string
+          description: Device required to support a particular MIFARE type
+          default: any
+          enum: [ unsupported, classic1k, classic4k, desfire4k, desfire2k, desfire8k, plus2k, plus4k, any ]
+          example: "desfire4k"
+        issuerAccountIds:
+          type: array
+          items:
+            type: number
+            format: int64
+            description: Limits delivery to a specific issuer account if set
+          example: [ 2445581126465, 2445581126466 ]
+        batchId:
+          type: array
+          description: Limits delivery to a specific set of batches if set
+          items:
+            type: integer
+          example: [ 10, 56 ]
+        forbiddenBatchId:
+          type: array
+          description: Forbids delivery for a specific set of batches if set
+          items:
+            type: integer
+          example: [ 10, 56 ]
+        deviceRequired:
+          type: boolean
+          description: Indicates that this service cannot be delivered without device
+          example: true
