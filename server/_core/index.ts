@@ -8,6 +8,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { handleStripeWebhook } from "./stripeWebhook";
+import { ENV, assertMiddlemanBridgeEnv } from "./env";
 
 // Only keep applet routes for hardware compatibility
 import appletRouter from "../api/applet";
@@ -32,6 +33,12 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Fail fast in production if Stripe / webhook env is missing.
+  assertMiddlemanBridgeEnv();
+  if (ENV.demoMode) {
+    console.log("[Env] DEMO_MODE — middleman bridge expects Stripe TEST keys");
+  }
+
   const app = express();
   const server = createServer(app);
 

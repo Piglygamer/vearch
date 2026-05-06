@@ -1,6 +1,13 @@
 /**
- * Bank Transfer Service - ACH & Wire Integration
- * Handles real ACH transfers and wire transfers for deposits and withdrawals
+ * @deprecated Legacy simulator.
+ *
+ * Bank Transfer Service - ACH & Wire Integration.
+ *
+ * ACH and wire transfers necessarily involve Vearch holding customer funds,
+ * which is outside the no-custody middleman model (see LEGAL.md). The real
+ * payment path is `server/services/charge.ts`. This module is kept
+ * compiling to avoid breaking the legacy demo pages and will be removed in
+ * a follow-up PR.
  */
 
 import * as crypto from "crypto";

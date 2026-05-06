@@ -6,6 +6,10 @@ import { z } from "zod";
 import { paymentRouter } from "./routers/paymentRouter";
 import { paymentEmulatorRouter } from "./routers/paymentEmulator";
 import { microchipRouter } from "./routers/microchipRouter";
+import { paymentMethodsRouter } from "./routers/paymentMethodsRouter";
+import { implantsBridgeRouter } from "./routers/implantsBridgeRouter";
+import { transactionsBridgeRouter } from "./routers/transactionsBridgeRouter";
+import { merchantRouter } from "./routers/merchantRouter";
 import {
   getWalletsByUserId,
   getTransactionsByUserId,
@@ -347,6 +351,11 @@ export const appRouter = router({
   payment: paymentRouter,
   paymentEmulator: paymentEmulatorRouter,
   microchip: microchipRouter,
+  // Middleman bridge — the real Stripe-backed flow. Prefer these going forward.
+  paymentMethods: paymentMethodsRouter,
+  implantsBridge: implantsBridgeRouter,
+  transactionsBridge: transactionsBridgeRouter,
+  merchant: merchantRouter,
 });
 
 export type AppRouter = typeof appRouter;
