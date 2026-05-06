@@ -17,6 +17,7 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  stripeCustomerId: varchar("stripeCustomerId", { length: 256 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -192,3 +193,23 @@ export const stripeAccounts = mysqlTable("stripeAccounts", {
 
 export type StripeAccount = typeof stripeAccounts.$inferSelect;
 export type InsertStripeAccount = typeof stripeAccounts.$inferInsert;
+
+/**
+ * Subscriptions table: Tracks user subscription tiers via Stripe.
+ * Stores subscription status, tier, and period information.
+ */
+export const subscriptions = mysqlTable("subscriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(), // One active subscription per user
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 256 }).notNull().unique(),
+  tier: mysqlEnum("tier", ["BASIC", "PRO", "ENTERPRISE"]).notNull(),
+  status: varchar("status", { length: 64 }).notNull(), // active, past_due, canceled, etc.
+  currentPeriodStart: timestamp("currentPeriodStart").notNull(),
+  currentPeriodEnd: timestamp("currentPeriodEnd").notNull(),
+  cancelAtPeriodEnd: boolean("cancelAtPeriodEnd").default(false),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;

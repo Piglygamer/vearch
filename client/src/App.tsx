@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
+import PaymentEmulator from "./pages/PaymentEmulator";
 
 function Router() {
   return (
@@ -14,6 +15,7 @@ function Router() {
       <Route path="/home" component={Home} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/dashboard/:tab" component={Dashboard} />
+      <Route path="/payment-emulator" component={PaymentEmulator} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

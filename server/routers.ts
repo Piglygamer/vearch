@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { paymentRouter } from "./routers/paymentRouter";
+import { paymentEmulatorRouter } from "./routers/paymentEmulator";
 import {
   getWalletsByUserId,
   getTransactionsByUserId,
@@ -343,6 +344,7 @@ export const appRouter = router({
   implant: implantRouter,
   card: cardRouter,
   payment: paymentRouter,
+  paymentEmulator: paymentEmulatorRouter,
 });
 
 export type AppRouter = typeof appRouter;

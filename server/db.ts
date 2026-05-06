@@ -8,7 +8,8 @@ import {
   Wallet, InsertWallet, wallets,
   Transaction, InsertTransaction, transactions,
   TokenReprovisioningLog, InsertTokenReprovisioningLog, tokenReprovisioningLog,
-  SystemHealth, InsertSystemHealth, systemHealth
+  SystemHealth, InsertSystemHealth, systemHealth,
+  Subscription, InsertSubscription, subscriptions
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 

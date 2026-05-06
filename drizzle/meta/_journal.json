@@ -22,6 +22,20 @@
       "when": 1777410603438,
       "tag": "0002_nervous_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1777533461406,
+      "tag": "0003_bent_weapon_omega",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1777533513955,
+      "tag": "0004_fair_shard",
+      "breakpoints": true
     }
   ]
 }
