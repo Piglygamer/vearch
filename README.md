@@ -1,10 +1,134 @@
-# Vearch Bank: Immortal Implant Payment OS
+# Vearch
 
-**100% Functional | Zero Fees | Forever Payments | Implant-Native**
+**A payment-routing layer for NFC implants.** Vearch is the middleman between
+a chip on your hand and a real merchant. The chip stores a UID. The user adds
+a real card via Stripe. A connected merchant POSTs the UID + amount to Vearch,
+which charges the cardholder's saved Stripe payment method off-session and
+routes funds to the merchant's Stripe Connect account.
 
-Vearch Bank is a decentralized, self-healing banking platform that enables users to manage payments through traditional cards and NFC implants (Apex Flex). Built for immortality with auto-renewing credentials, real Stripe integration, and continuous health monitoring.
+> **Vearch is not a bank.** Vearch never holds customer funds, never sees a
+> PAN, and is not a money transmitter. Stripe is the processor of record;
+> merchants must complete their own Stripe Connect onboarding (Stripe handles
+> their KYB). See [LEGAL.md](./LEGAL.md) for details.
 
-## Features
+## How a charge works
+
+```
+   chip (UID)        terminal app                      Vearch backend                     Stripe
+       │                  │                                  │                              │
+       │ ──── tap ───►    │                                  │                              │
+       │                  │ ── POST /merchant.charge ──────► │                              │
+       │                  │   { uid, amountCents }           │                              │
+       │                  │   x-vearch-merchant-key: vmk_…   │                              │
+       │                  │                                  │ resolve uid → user → pm_…    │
+       │                  │                                  │ paymentIntents.create({      │
+       │                  │                                  │   off_session: true,         │
+       │                  │                                  │   confirm: true,             │
+       │                  │                                  │   transfer_data: {           │
+       │                  │                                  │     destination: acct_…      │
+       │                  │                                  │   }                          │
+       │                  │                                  │ }) ────────────────────────► │
+       │                  │ ◄─── { approved, declineCode? }  │ ◄────────────────────────── │
+```
+
+Money flow: `cardholder card → Stripe → merchant's Stripe Connect account`.
+Funds never sit in a Vearch-controlled balance.
+
+## What's in the box
+
+This repository contains both the **middleman bridge** (the real path
+described above) and a **legacy simulator** (a set of pages and routers
+written before the bridge that pretended Vearch was a bank, mocked an EMV
+applet on the chip, and simulated card issuance). The simulator is kept
+working for now but is **deprecated**; future work will remove it.
+
+Use these for the bridge:
+
+- **Server**:
+  - `server/services/stripeCustomer.ts` — Stripe Customer + SetupIntent
+  - `server/services/implantLink.ts` — UID ↔ user linking
+  - `server/services/charge.ts` — `chargeByImplantUid(...)`, the off-session PI
+  - `server/services/merchantAuth.ts` — `vmk_…` API key generation + lookup
+  - `server/_core/stripeWebhook.ts` — verifies signatures and persists
+    `payment_intent.*`, `payment_method.*`, and `charge.refunded` events
+  - tRPC: `paymentMethods.{listMine,createSetupIntent,setDefault,detach}`,
+    `implantsBridge.{listMine,link,unlink}`, `transactionsBridge.listMine`,
+    `merchant.{charge,whoami}` (header-auth via `x-vearch-merchant-key`)
+- **Client**:
+  - `client/src/components/AddPaymentMethod.tsx` — Stripe Elements +
+    SetupIntent. The PAN never leaves Stripe.
+  - `client/src/components/LinkImplant.tsx` — Web NFC `NDEFReader` →
+    `implantsBridge.link`.
+  - `client/src/pages/TerminalDemo.tsx` (`/terminal`) — phone-side merchant
+    terminal. Holds the API key in tab memory only.
+- **Schema**:
+  - `implants.uid` — the bytes the terminal reads off the chip
+  - `paymentMethods` — read-only mirror of Stripe PaymentMethods
+  - `merchants` — connected-account merchants and their hashed API keys
+  - Migration: `drizzle/0005_middleman_bridge.sql`
+
+## Running the bridge locally
+
+```bash
+# 1. Install
+pnpm install
+
+# 2. Env. The bridge requires Stripe TEST keys at minimum.
+cp .env.example .env
+# Edit .env to set:
+#   STRIPE_SECRET_KEY=sk_test_...
+#   STRIPE_WEBHOOK_SECRET=whsec_...
+#   VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
+#   DATABASE_URL=mysql://...
+#   DEMO_MODE=true   # shows test-mode banner; not required outside production
+
+# 3. Apply schema
+pnpm db:push    # against a real database
+# OR: apply drizzle/0005_middleman_bridge.sql by hand against your DB.
+
+# 4. Provision a test merchant (one-shot, in a node REPL or script):
+#   import { provisionMerchant } from "./server/services/merchantAuth";
+#   const { apiKey } = await provisionMerchant({
+#     name: "Demo Coffee",
+#     stripeAccountId: "acct_…", // a real connected account from Stripe Connect
+#   });
+#   // Save apiKey somewhere safe — it is shown once.
+
+# 5. Run
+pnpm dev
+```
+
+In production, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and
+`VITE_STRIPE_PUBLISHABLE_KEY` are required at boot; the server fails to
+start if any are missing.
+
+## Tests
+
+The middleman bridge ships with the following test suites:
+
+| File | What it covers |
+| --- | --- |
+| `server/charge.test.ts` | `chargeByImplantUid` — off_session + confirm, idempotency key forwarding, decline-code mapping (incl. `authentication_required`/3DS) |
+| `server/stripeWebhook.test.ts` | Signature verification (real `Stripe.webhooks.generateTestHeaderString` fixtures), event dispatch table |
+| `server/merchantAuth.test.ts` | API key generation, prefix lookup, constant-time hash compare |
+| `server/merchantRouter.test.ts` | tRPC `merchant.charge` requires a valid `x-vearch-merchant-key` header |
+
+Run with `pnpm test`.
+
+---
+
+# Legacy simulator (deprecated)
+
+> ⚠️ Everything below describes a deprecated set of features written before
+> the middleman bridge: simulated EMV applets on the chip, fake virtual
+> cards, simulated balances, simulated ACH, simulated crypto. None of these
+> are part of the real payment path. They will be removed in a follow-up PR.
+> The header that used to be here ("Immortal Implant Payment OS",
+> "100% Functional", "PCI DSS compliant", "92 tests passing") was inaccurate
+> — Vearch is not PCI-certified, has no concept of "immortal cards", and
+> does not hold customer funds.
+
+## Features (legacy)
 
 ### 🏦 Complete Banking Platform
 - **Multi-User Accounts**: Register, authenticate, and manage accounts

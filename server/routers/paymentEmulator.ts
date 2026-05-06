@@ -1,3 +1,12 @@
+/**
+ * @deprecated Legacy simulator.
+ *
+ * Vearch does not issue cards. The user's saved card lives on their Stripe
+ * Customer; charges are made off-session against that real card via
+ * `merchant.charge` (server/routers/merchantRouter.ts). This router is kept
+ * mounted to avoid breaking the legacy PaymentEmulator page and will be
+ * removed in a follow-up PR.
+ */
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";

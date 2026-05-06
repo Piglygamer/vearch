@@ -1,3 +1,11 @@
+/**
+ * @deprecated Legacy simulator. Vearch's real payment path is the middleman
+ * bridge in `server/services/charge.ts` (Stripe-backed off-session
+ * PaymentIntent on a saved Stripe PaymentMethod). Crypto on/off-ramps would
+ * be funds custody and are out of scope; see LEGAL.md. This module is kept
+ * compiling to avoid breaking the legacy demo pages and will be removed in
+ * a follow-up PR.
+ */
 import * as bip39 from "bip39";
 import * as bitcoin from "bitcoinjs-lib";
 import { BIP32Factory } from "bip32";

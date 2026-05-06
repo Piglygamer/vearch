@@ -9,7 +9,9 @@ import {
   Transaction, InsertTransaction, transactions,
   TokenReprovisioningLog, InsertTokenReprovisioningLog, tokenReprovisioningLog,
   SystemHealth, InsertSystemHealth, systemHealth,
-  Subscription, InsertSubscription, subscriptions
+  Subscription, InsertSubscription, subscriptions,
+  PaymentMethod, InsertPaymentMethod, paymentMethods,
+  Merchant, InsertMerchant, merchants,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -338,4 +340,136 @@ export async function getCriticalSystemIssues(): Promise<SystemHealth[]> {
   return db.select().from(systemHealth)
     .where(eq(systemHealth.status, "critical"))
     .orderBy(desc(systemHealth.createdAt));
+}
+
+// ============================================================================
+// MIDDLEMAN BRIDGE: PAYMENT METHODS (Stripe-mirrored)
+// ============================================================================
+
+export async function listPaymentMethodsByUserId(userId: number): Promise<PaymentMethod[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(paymentMethods)
+    .where(eq(paymentMethods.userId, userId))
+    .orderBy(desc(paymentMethods.isDefault), desc(paymentMethods.createdAt));
+}
+
+export async function getDefaultPaymentMethodForUser(userId: number): Promise<PaymentMethod | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(paymentMethods)
+    .where(and(eq(paymentMethods.userId, userId), eq(paymentMethods.isDefault, true)))
+    .limit(1);
+  if (rows.length > 0) return rows[0];
+  // Fall back to most recently attached method.
+  const recent = await db.select().from(paymentMethods)
+    .where(eq(paymentMethods.userId, userId))
+    .orderBy(desc(paymentMethods.createdAt))
+    .limit(1);
+  return recent.length > 0 ? recent[0] : undefined;
+}
+
+export async function getPaymentMethodByStripeId(stripeId: string): Promise<PaymentMethod | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(paymentMethods)
+    .where(eq(paymentMethods.stripePaymentMethodId, stripeId))
+    .limit(1);
+  return rows.length > 0 ? rows[0] : undefined;
+}
+
+export async function upsertPaymentMethod(pm: InsertPaymentMethod): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(paymentMethods).values(pm).onDuplicateKeyUpdate({
+    set: {
+      brand: pm.brand ?? null,
+      last4: pm.last4 ?? null,
+      expMonth: pm.expMonth ?? null,
+      expYear: pm.expYear ?? null,
+    },
+  });
+}
+
+export async function detachPaymentMethodByStripeId(stripeId: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(paymentMethods).where(eq(paymentMethods.stripePaymentMethodId, stripeId));
+}
+
+export async function setDefaultPaymentMethod(userId: number, paymentMethodDbId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(paymentMethods)
+    .set({ isDefault: false })
+    .where(eq(paymentMethods.userId, userId));
+  await db.update(paymentMethods)
+    .set({ isDefault: true })
+    .where(and(eq(paymentMethods.userId, userId), eq(paymentMethods.id, paymentMethodDbId)));
+}
+
+// ============================================================================
+// MIDDLEMAN BRIDGE: IMPLANT-UID LOOKUP
+// ============================================================================
+
+export async function getImplantByUid(uid: string): Promise<Implant | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(implants).where(eq(implants.uid, uid)).limit(1);
+  return rows.length > 0 ? rows[0] : undefined;
+}
+
+export async function setImplantUid(implantDbId: number, uid: string, label?: string | null): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(implants)
+    .set({ uid, label: label ?? null, updatedAt: new Date() })
+    .where(eq(implants.id, implantDbId));
+}
+
+// ============================================================================
+// MIDDLEMAN BRIDGE: MERCHANTS
+// ============================================================================
+
+export async function createMerchant(merchant: InsertMerchant): Promise<Merchant> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(merchants).values(merchant);
+  const id = result[0].insertId;
+  const created = await db.select().from(merchants).where(eq(merchants.id, Number(id))).limit(1);
+  if (!created.length) throw new Error("Failed to create merchant");
+  return created[0];
+}
+
+export async function getMerchantByApiKeyPrefix(prefix: string): Promise<Merchant | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(merchants)
+    .where(eq(merchants.apiKeyPrefix, prefix))
+    .limit(1);
+  return rows.length > 0 ? rows[0] : undefined;
+}
+
+// ============================================================================
+// MIDDLEMAN BRIDGE: TRANSACTIONS BY STRIPE PI ID
+// ============================================================================
+
+export async function getTransactionByStripePaymentIntentId(piId: string): Promise<Transaction | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(transactions)
+    .where(eq(transactions.stripePaymentIntentId, piId))
+    .limit(1);
+  return rows.length > 0 ? rows[0] : undefined;
+}
+
+export async function updateTransactionByStripePaymentIntentId(
+  piId: string,
+  patch: Partial<{ status: "pending" | "completed" | "failed" | "reversed"; metadata: string }>
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(transactions)
+    .set({ ...patch, updatedAt: new Date() } as any)
+    .where(eq(transactions.stripePaymentIntentId, piId));
 }

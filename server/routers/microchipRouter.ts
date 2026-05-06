@@ -1,3 +1,12 @@
+/**
+ * @deprecated Legacy simulator.
+ *
+ * The chip is not running an EMV applet — it stores only a UID. The real
+ * link path is `implantsBridge.link` (server/routers/implantsBridgeRouter.ts)
+ * which calls `linkImplant` in `server/services/implantLink.ts`. This router
+ * is kept mounted to avoid breaking the legacy MicrochipDeployment page and
+ * will be removed in a follow-up PR.
+ */
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";

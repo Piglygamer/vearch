@@ -28,17 +28,28 @@ export type InsertUser = typeof users.$inferInsert;
 
 /**
  * Implants table: Tracks NFC/payment implants linked to users.
- * Stores implant identity, NxtPay token reference, and lifecycle status.
+ *
+ * In the middleman-bridge model, the implant is just a unique identifier (UID)
+ * that the terminal reads. It carries no PAN, no balance, and no EMV applet.
+ * The `uid` column stores those bytes (lowercase hex). Lookups during a charge
+ * resolve `uid -> userId -> default Stripe payment method`.
+ *
+ * Other columns are retained for backward compatibility with the legacy
+ * applet/NxtPay simulator code paths, which are deprecated.
  */
 export const implants = mysqlTable("implants", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  implantId: varchar("implantId", { length: 128 }).notNull().unique(), // Unique identifier for the physical implant
+  implantId: varchar("implantId", { length: 128 }).notNull().unique(), // Legacy: app-level identifier
+  /** Bytes read off the chip (lowercase hex). Required for the middleman bridge. */
+  uid: varchar("uid", { length: 128 }).unique(),
+  /** Optional human label, e.g. "left hand". */
+  label: varchar("label", { length: 128 }),
   implantType: varchar("implantType", { length: 64 }).notNull(), // e.g., "NxtPay", "Apex Flex"
-  nxtpayTokenId: varchar("nxtpayTokenId", { length: 256 }), // Reference to NxtPay backend token
+  nxtpayTokenId: varchar("nxtpayTokenId", { length: 256 }), // Legacy: NxtPay backend token
   status: mysqlEnum("status", ["active", "expiring", "expired", "revoked"]).default("active").notNull(),
   linkedAt: timestamp("linkedAt").defaultNow().notNull(),
-  expiresAt: timestamp("expiresAt"), // When the implant expires (year 30000 = never)
+  expiresAt: timestamp("expiresAt"), // Legacy: year 30000 = never
   lastSyncedAt: timestamp("lastSyncedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -130,6 +141,8 @@ export const transactions = mysqlTable("transactions", {
   merchantName: varchar("merchantName", { length: 256 }),
   description: text("description"),
   metadata: text("metadata"), // JSON: additional transaction details
+  /** Stripe PaymentIntent id when this transaction was created via the middleman bridge. */
+  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 256 }).unique(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -213,3 +226,56 @@ export const subscriptions = mysqlTable("subscriptions", {
 
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = typeof subscriptions.$inferInsert;
+
+// ============================================================================
+// MIDDLEMAN BRIDGE TABLES
+// ----------------------------------------------------------------------------
+// The middleman bridge model: implant UID -> user -> Stripe Customer ->
+// Stripe-saved PaymentMethod -> off-session PaymentIntent. Vearch never sees
+// the PAN; Stripe is the processor of record. See LEGAL.md.
+// ============================================================================
+
+/**
+ * PaymentMethods table: read-only mirror of the Stripe PaymentMethods a user
+ * has saved on their Stripe Customer. We never store PAN or CVV — only the
+ * Stripe id and display metadata (brand + last4 + exp). Source of truth is
+ * Stripe; this row is kept in sync via the `payment_method.attached` and
+ * `payment_method.detached` webhook events.
+ */
+export const paymentMethods = mysqlTable("paymentMethods", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  stripePaymentMethodId: varchar("stripePaymentMethodId", { length: 256 }).notNull().unique(),
+  brand: varchar("brand", { length: 32 }), // visa, mastercard, amex, ...
+  last4: varchar("last4", { length: 4 }),
+  expMonth: int("expMonth"),
+  expYear: int("expYear"),
+  isDefault: boolean("isDefault").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PaymentMethod = typeof paymentMethods.$inferSelect;
+export type InsertPaymentMethod = typeof paymentMethods.$inferInsert;
+
+/**
+ * Merchants table: connected-account merchants who can submit charges
+ * against an implant UID. Each merchant has a Stripe Connect account id and
+ * an API key whose hash is stored here. The plaintext key is shown once at
+ * creation and never persisted.
+ */
+export const merchants = mysqlTable("merchants", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 256 }).notNull(),
+  stripeAccountId: varchar("stripeAccountId", { length: 256 }).notNull().unique(),
+  /** SHA-256 hex of the merchant's API key. */
+  apiKeyHash: varchar("apiKeyHash", { length: 128 }).notNull().unique(),
+  /** Public, non-secret prefix used to look up the row before constant-time hash compare. */
+  apiKeyPrefix: varchar("apiKeyPrefix", { length: 32 }).notNull().unique(),
+  status: mysqlEnum("status", ["active", "suspended"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Merchant = typeof merchants.$inferSelect;
+export type InsertMerchant = typeof merchants.$inferInsert;

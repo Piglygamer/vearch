@@ -8,6 +8,7 @@ import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import PaymentEmulator from "./pages/PaymentEmulator";
 import MicrochipDeployment from "./pages/MicrochipDeployment";
+import TerminalDemo from "./pages/TerminalDemo";
 
 function Router() {
   return (
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/dashboard/:tab" component={Dashboard} />
       <Route path="/payment-emulator" component={PaymentEmulator} />
       <Route path="/microchip-deployment" component={MicrochipDeployment} />
+      <Route path="/terminal" component={TerminalDemo} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

@@ -10,7 +10,13 @@ import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
 
-const stripePromise = loadStripe("pk_live_51McGJ42nZsNbWnNOTdELhtgZHR3e6sSB0IKGb5G5xUN9EoeXboOSyRUfrbwfQSFAgBGeaPS2adh3MQEy1AoQu8lD00VBaGZm4g");
+// Publishable key: prefer the build-time env var (VITE_STRIPE_PUBLISHABLE_KEY)
+// so demo and production deployments don't need a code change to swap keys.
+// Falls back to the legacy hard-coded key only if the env var isn't set.
+const STRIPE_PUBLISHABLE_KEY =
+  (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined) ||
+  "pk_live_51McGJ42nZsNbWnNOTdELhtgZHR3e6sSB0IKGb5G5xUN9EoeXboOSyRUfrbwfQSFAgBGeaPS2adh3MQEy1AoQu8lD00VBaGZm4g";
+const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
 const queryClient = new QueryClient();
 
