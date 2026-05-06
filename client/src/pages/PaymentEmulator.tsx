@@ -11,7 +11,6 @@ export default function PaymentEmulator() {
   const [pin, setPin] = useState("1234");
   const [transAmount, setTransAmount] = useState("25.00");
   const [merchant, setMerchant] = useState("Starbucks");
-  const [description, setDescription] = useState("Coffee");
   const [paymentMethodId, setPaymentMethodId] = useState("pm_test");
   const [initialBalance, setInitialBalance] = useState("1000");
 
@@ -60,7 +59,7 @@ export default function PaymentEmulator() {
         cardId: currentCardId,
         amount: parseFloat(transAmount),
         merchant,
-        description,
+        description: "Transaction",
       });
       getCardQuery.refetch();
       getTransactionsQuery.refetch();
@@ -100,57 +99,38 @@ export default function PaymentEmulator() {
               <CardTitle className="text-cyan-400">💳 Create Virtual Card</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm text-slate-300">Cardholder Name</label>
-                <Input
-                  value={cardholderName}
-                  onChange={(e) => setCardholderName(e.target.value)}
-                  placeholder="John Doe"
-                  className="bg-slate-700 border-slate-600"
-                />
-              </div>
+              <Input
+                placeholder="Cardholder Name"
+                value={cardholderName}
+                onChange={(e) => setCardholderName(e.target.value)}
+                className="bg-slate-700 border-slate-600 text-white"
+              />
               <Button
                 onClick={handleCreateCard}
                 disabled={createCardMutation.isPending}
-                className="w-full bg-gradient-to-r from-pink-500 to-cyan-500"
+                className="w-full bg-gradient-to-r from-pink-500 to-cyan-500 hover:from-pink-600 hover:to-cyan-600"
               >
-                {createCardMutation.isPending ? "Creating..." : "Generate Card (07/30979)"}
+                {createCardMutation.isPending ? "Creating..." : "Create Card"}
               </Button>
-              {createCardMutation.data && (
-                <Alert className="bg-green-900 border-green-700">
-                  <AlertDescription className="text-green-200">
-                    ✓ Card created! PAN: {createCardMutation.data.card.pan}
+              {getCardQuery.data?.card && (
+                <Alert className="bg-slate-700 border-slate-600">
+                  <AlertDescription className="text-cyan-400">
+                    <div className="space-y-2">
+                      <div>
+                        <strong>Card ID:</strong> {getCardQuery.data.card.id}
+                      </div>
+                      <div>
+                        <strong>PAN:</strong> ****{getCardQuery.data.card.pan.slice(-4)}
+                      </div>
+                      <div>
+                        <strong>Expiry:</strong> {getCardQuery.data.card.expiry}
+                      </div>
+                      <div>
+                        <strong>Balance:</strong> ${getCardQuery.data.card.balance.toFixed(2)}
+                      </div>
+                    </div>
                   </AlertDescription>
                 </Alert>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Active Card */}
-          <Card className="bg-slate-800 border-slate-700">
-            <CardHeader>
-              <CardTitle className="text-cyan-400">🔐 Active Card</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {getCardQuery.data?.card ? (
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">PAN:</span>
-                    <span className="font-mono text-cyan-400">{getCardQuery.data.card.pan}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Balance:</span>
-                    <span className="font-mono text-green-400">
-                      ${getCardQuery.data.card.balance.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Expiry:</span>
-                    <span className="font-mono text-cyan-400">{getCardQuery.data.card.expiry}</span>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-slate-400">No card created yet</p>
               )}
             </CardContent>
           </Card>
@@ -161,145 +141,103 @@ export default function PaymentEmulator() {
               <CardTitle className="text-cyan-400">💰 Link Payment Method</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm text-slate-300">Payment Method ID</label>
-                <Input
-                  value={paymentMethodId}
-                  onChange={(e) => setPaymentMethodId(e.target.value)}
-                  placeholder="pm_1234567890"
-                  className="bg-slate-700 border-slate-600"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-slate-300">Initial Balance ($)</label>
-                <Input
-                  type="number"
-                  value={initialBalance}
-                  onChange={(e) => setInitialBalance(e.target.value)}
-                  placeholder="1000"
-                  className="bg-slate-700 border-slate-600"
-                />
-              </div>
+              <Input
+                placeholder="Payment Method ID"
+                value={paymentMethodId}
+                onChange={(e) => setPaymentMethodId(e.target.value)}
+                className="bg-slate-700 border-slate-600 text-white"
+              />
+              <Input
+                placeholder="Initial Balance"
+                type="number"
+                value={initialBalance}
+                onChange={(e) => setInitialBalance(e.target.value)}
+                className="bg-slate-700 border-slate-600 text-white"
+              />
               <Button
                 onClick={handleLinkPaymentMethod}
-                disabled={linkPaymentMutation.isPending || !currentCardId}
-                className="w-full bg-gradient-to-r from-pink-500 to-cyan-500"
+                disabled={!currentCardId || linkPaymentMutation.isPending}
+                className="w-full bg-gradient-to-r from-pink-500 to-cyan-500 hover:from-pink-600 hover:to-cyan-600"
               >
-                {linkPaymentMutation.isPending ? "Linking..." : "Link & Fund Card"}
+                {linkPaymentMutation.isPending ? "Linking..." : "Link Payment Method"}
               </Button>
             </CardContent>
           </Card>
+        </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* Process Transaction */}
           <Card className="bg-slate-800 border-slate-700">
             <CardHeader>
               <CardTitle className="text-cyan-400">🛒 Process Transaction</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm text-slate-300">Amount ($)</label>
-                <Input
-                  type="number"
-                  value={transAmount}
-                  onChange={(e) => setTransAmount(e.target.value)}
-                  placeholder="25.00"
-                  className="bg-slate-700 border-slate-600"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-slate-300">Merchant</label>
-                <Input
-                  value={merchant}
-                  onChange={(e) => setMerchant(e.target.value)}
-                  placeholder="Starbucks"
-                  className="bg-slate-700 border-slate-600"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-slate-300">Description</label>
-                <Input
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Coffee"
-                  className="bg-slate-700 border-slate-600"
-                />
-              </div>
+              <Input
+                placeholder="Amount"
+                type="number"
+                value={transAmount}
+                onChange={(e) => setTransAmount(e.target.value)}
+                className="bg-slate-700 border-slate-600 text-white"
+              />
+              <Input
+                placeholder="Merchant"
+                value={merchant}
+                onChange={(e) => setMerchant(e.target.value)}
+                className="bg-slate-700 border-slate-600 text-white"
+              />
               <Button
                 onClick={handleProcessTransaction}
-                disabled={processTransactionMutation.isPending || !currentCardId}
-                className="w-full bg-gradient-to-r from-pink-500 to-cyan-500"
+                disabled={!currentCardId || processTransactionMutation.isPending}
+                className="w-full bg-gradient-to-r from-pink-500 to-cyan-500 hover:from-pink-600 hover:to-cyan-600"
               >
-                {processTransactionMutation.isPending ? "Processing..." : "💳 Charge Card"}
+                {processTransactionMutation.isPending ? "Processing..." : "Process Transaction"}
               </Button>
             </CardContent>
           </Card>
 
-          {/* Apex Flex Emulation */}
+          {/* Emulate Card Scan */}
           <Card className="bg-slate-800 border-slate-700">
             <CardHeader>
-              <CardTitle className="text-cyan-400">📱 Apex Flex Emulation</CardTitle>
+              <CardTitle className="text-cyan-400">📱 Emulate Card Scan</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm text-slate-300">PIN (default: 1234)</label>
-                <Input
-                  type="password"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  placeholder="1234"
-                  className="bg-slate-700 border-slate-600"
-                />
-              </div>
+              <Input
+                placeholder="PIN"
+                type="password"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                className="bg-slate-700 border-slate-600 text-white"
+              />
               <Button
                 onClick={handleEmulateCardScan}
-                disabled={emulateCardScanMutation.isPending || !currentCardId}
-                className="w-full bg-gradient-to-r from-pink-500 to-cyan-500"
+                disabled={!currentCardId || emulateCardScanMutation.isPending}
+                className="w-full bg-gradient-to-r from-pink-500 to-cyan-500 hover:from-pink-600 hover:to-cyan-600"
               >
-                {emulateCardScanMutation.isPending ? "Scanning..." : "📡 Scan Card"}
+                {emulateCardScanMutation.isPending ? "Scanning..." : "Emulate Scan"}
               </Button>
               {emulateCardScanMutation.data && (
-                <Alert className="bg-blue-900 border-blue-700">
-                  <AlertDescription className="text-blue-200 text-xs">
-                    AID: {emulateCardScanMutation.data.appletData.aid}
-                  </AlertDescription>
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* My Cards */}
-          <Card className="bg-slate-800 border-slate-700">
-            <CardHeader>
-              <CardTitle className="text-cyan-400">📋 My Cards</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {getMyCardsQuery.data?.cards && getMyCardsQuery.data.cards.length > 0 ? (
-                <div className="space-y-2">
-                  {getMyCardsQuery.data.cards.map((card) => (
-                    <div
-                      key={card.id}
-                      onClick={() => setCurrentCardId(card.id)}
-                      className="p-2 bg-slate-700 rounded cursor-pointer hover:bg-slate-600 text-sm"
-                    >
-                      <div className="flex justify-between">
-                        <span className="text-slate-300">{card.cardholderName}</span>
-                        <span className="text-cyan-400">****{card.pan.slice(-4)}</span>
+                <Alert className="bg-slate-700 border-slate-600">
+                  <AlertDescription className="text-cyan-400">
+                    <div className="space-y-2">
+                      <div>
+                        <strong>AID:</strong> {emulateCardScanMutation.data.appletData.aid}
                       </div>
-                      <div className="text-xs text-slate-400">
-                        Balance: ${card.balance.toFixed(2)}
+                      <div>
+                        <strong>PAN:</strong> {emulateCardScanMutation.data.appletData.pan}
+                      </div>
+                      <div>
+                        <strong>Balance:</strong> ${emulateCardScanMutation.data.appletData.balance.toFixed(2)}
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-slate-400">No cards yet</p>
+                  </AlertDescription>
+                </Alert>
               )}
             </CardContent>
           </Card>
         </div>
 
         {/* Transaction History */}
-        {getTransactionsQuery.data?.transactions && (
+        {getTransactionsQuery.data?.transactions && getTransactionsQuery.data.transactions.length > 0 && (
           <Card className="bg-slate-800 border-slate-700">
             <CardHeader>
               <CardTitle className="text-cyan-400">📊 Transaction History</CardTitle>
@@ -312,9 +250,8 @@ export default function PaymentEmulator() {
                       <span className="text-slate-300">{trans.merchant}</span>
                       <span className="text-green-400">-${trans.amount.toFixed(2)}</span>
                     </div>
-                    <div className="text-xs text-slate-400">{trans.description}</div>
                     <div className="text-xs text-slate-500">
-                      {new Date(trans.timestamp).toLocaleString()}
+                      {new Date(trans.date).toLocaleString()}
                     </div>
                   </div>
                 ))}

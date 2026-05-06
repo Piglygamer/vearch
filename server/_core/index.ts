@@ -1,5 +1,4 @@
-import "dotenv/config";
-import express from "express";
+import express, { type Express } from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -54,14 +53,6 @@ async function startServer() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // Minimal REST routes — applet hardware compatibility only
-  app.use("/api/applet", appletRouter);
-
-  // 404 handler
-  app.use((req, res) => {
-    res.status(404).json({ error: "Not found" });
-  });
-
   // tRPC API — the primary data layer for frontend and backend
   app.use(
     "/api/trpc",
@@ -71,6 +62,9 @@ async function startServer() {
     })
   );
 
+  // Minimal REST routes — applet hardware compatibility only
+  app.use("/api/applet", appletRouter);
+
   // Development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     console.log("[Server] Running in development mode with Vite");
@@ -79,6 +73,11 @@ async function startServer() {
     console.log("[Server] Running in production mode with static files");
     serveStatic(app);
   }
+
+  // 404 handler — MUST be last
+  app.use((req, res) => {
+    res.status(404).json({ error: "Not found" });
+  });
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
