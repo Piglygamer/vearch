@@ -26,16 +26,36 @@ import {
   authenticateMerchantByKey,
   provisionMerchant,
   constantTimeEqual,
-  sha256Hex,
+  scryptVerify,
 } from "./services/merchantAuth";
 
 describe("generateMerchantApiKey", () => {
-  it("produces a vmk_<prefix>_<secret> key whose secret hashes to the stored hash", () => {
+  it("produces a vmk_<prefix>_<secret> key whose secret verifies against the stored hash", () => {
     const k = generateMerchantApiKey();
     expect(k.plaintext).toMatch(/^vmk_[0-9a-f]{12}_[0-9a-f]{48}$/);
     expect(k.prefix).toMatch(/^[0-9a-f]{12}$/);
+    expect(k.hash).toMatch(/^scrypt\$[0-9a-f]+\$[0-9a-f]+$/);
     const secret = k.plaintext.slice(("vmk_" + k.prefix + "_").length);
-    expect(sha256Hex(secret)).toBe(k.hash);
+    expect(scryptVerify(secret, k.hash)).toBe(true);
+    expect(scryptVerify(secret + "x", k.hash)).toBe(false);
+  });
+
+  it("uses a fresh random salt per invocation", () => {
+    const a = generateMerchantApiKey();
+    const b = generateMerchantApiKey();
+    // Different salts → different stored hashes even if (hypothetically) the same secret.
+    const aSalt = a.hash.split("$")[1];
+    const bSalt = b.hash.split("$")[1];
+    expect(aSalt).not.toBe(bSalt);
+  });
+});
+
+describe("scryptVerify", () => {
+  it("rejects malformed stored hashes without throwing", () => {
+    expect(scryptVerify("anything", "")).toBe(false);
+    expect(scryptVerify("anything", "not-a-scrypt-hash")).toBe(false);
+    expect(scryptVerify("anything", "scrypt$$")).toBe(false);
+    expect(scryptVerify("anything", "scrypt$abcd$shorthex")).toBe(false);
   });
 });
 

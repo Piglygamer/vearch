@@ -19,16 +19,18 @@ interface LinkImplantProps {
 }
 
 /** Extract a usable UID from an NFC reading event. */
-function extractUid(event: any): string | null {
+function extractUid(event: NDEFReadingEvent): string | null {
   // Prefer the chip's serialNumber if the browser exposes it.
-  if (typeof event?.serialNumber === "string" && event.serialNumber.length > 0) {
+  if (typeof event.serialNumber === "string" && event.serialNumber.length > 0) {
     return event.serialNumber;
   }
   // Fall back to the first NDEF text record.
-  const records = event?.message?.records ?? [];
-  if (records.length > 0) {
+  const records = event.message?.records ?? [];
+  if (records.length > 0 && records[0].data) {
     try {
-      return new TextDecoder().decode(records[0].data);
+      const data = records[0].data;
+      const buffer = data instanceof ArrayBuffer ? data : data.buffer;
+      return new TextDecoder().decode(buffer);
     } catch {
       return null;
     }
@@ -64,9 +66,10 @@ export function LinkImplant({ onLinked }: LinkImplantProps) {
     }
     setScanning(true);
     try {
-      const ndef = new (window as any).NDEFReader();
+      if (!window.NDEFReader) throw new Error("Web NFC is not available");
+      const ndef = new window.NDEFReader();
       await ndef.scan();
-      ndef.onreading = (event: any) => {
+      ndef.onreading = (event) => {
         const u = extractUid(event);
         if (u) setUid(u);
         setScanning(false);

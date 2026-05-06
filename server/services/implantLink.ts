@@ -50,11 +50,12 @@ export async function linkImplant(opts: {
 }
 
 /**
- * Resolve a chip UID to (user, default payment method). Returns null if
- * the UID is unknown or no payment method is on file. Callers must not
- * leak which of the two failed.
+ * Resolve a chip UID to (user, default payment method, implant id). Returns
+ * null if the UID is unknown or no payment method is on file. Callers must
+ * not leak which of the two failed.
  */
 export async function resolveImplant(uid: string): Promise<{
+  implantId: number;
   userId: number;
   stripeCustomerId: string;
   stripePaymentMethodId: string;
@@ -72,6 +73,7 @@ export async function resolveImplant(uid: string): Promise<{
   if (!pm) return null;
 
   return {
+    implantId: implant.id,
     userId: user.id,
     stripeCustomerId: user.stripeCustomerId,
     stripePaymentMethodId: pm.stripePaymentMethodId,

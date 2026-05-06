@@ -10,7 +10,7 @@ import type Stripe from "stripe";
 import { resolveImplant } from "./implantLink";
 import { getStripe } from "./stripeClient";
 import { getDb, createTransaction } from "../db";
-import { transactions, implants } from "../../drizzle/schema";
+import { transactions } from "../../drizzle/schema";
 import { and, eq, gte } from "drizzle-orm";
 
 export type ChargeResult =
@@ -82,15 +82,10 @@ export async function chargeByImplantUid(input: ChargeInput, stripe: Stripe = ge
     return { approved: false, declineCode: "unknown_implant", message: "Unknown implant or no payment method on file" };
   }
 
-  // Rate limit per implant (lookup the db id first).
-  const db = await getDb();
-  let implantDbId: number | undefined;
-  if (db) {
-    const rows = await db.select({ id: implants.id }).from(implants).where(eq(implants.userId, resolved.userId)).limit(1);
-    implantDbId = rows[0]?.id;
-    if (implantDbId && (await isRateLimited(implantDbId, input.rateLimitSeconds ?? 5))) {
-      return { approved: false, declineCode: "rate_limited", message: "Implant tapped too recently; try again in a few seconds" };
-    }
+  // Per-implant rate limit. Uses the implant id returned by resolveImplant
+  // (NOT a user-scoped lookup — a user can have multiple implants).
+  if (await isRateLimited(resolved.implantId, input.rateLimitSeconds ?? 5)) {
+    return { approved: false, declineCode: "rate_limited", message: "Implant tapped too recently; try again in a few seconds" };
   }
 
   let intent: Stripe.PaymentIntent;
@@ -119,7 +114,7 @@ export async function chargeByImplantUid(input: ChargeInput, stripe: Stripe = ge
   // Persist the transaction row regardless of webhook delivery.
   await createTransaction({
     userId: resolved.userId,
-    implantId: implantDbId ?? null,
+    implantId: resolved.implantId,
     transactionType: "payment",
     amount: (input.amountCents / 100).toFixed(2),
     currency: currency.toUpperCase(),

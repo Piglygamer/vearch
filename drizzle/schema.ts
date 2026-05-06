@@ -268,7 +268,7 @@ export const merchants = mysqlTable("merchants", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 256 }).notNull(),
   stripeAccountId: varchar("stripeAccountId", { length: 256 }).notNull().unique(),
-  /** SHA-256 hex of the merchant's API key. */
+  /** scrypt-derived hash of the merchant's API key, stored as `scrypt$<salt-hex>$<hash-hex>`. */
   apiKeyHash: varchar("apiKeyHash", { length: 128 }).notNull().unique(),
   /** Public, non-secret prefix used to look up the row before constant-time hash compare. */
   apiKeyPrefix: varchar("apiKeyPrefix", { length: 32 }).notNull().unique(),

@@ -71,10 +71,11 @@ export default function TerminalDemo() {
     }
     setScanning(true);
     try {
-      const ndef = new (window as any).NDEFReader();
+      if (!window.NDEFReader) throw new Error("Web NFC is not available");
+      const ndef = new window.NDEFReader();
       await ndef.scan();
-      ndef.onreading = (event: any) => {
-        const serial = typeof event?.serialNumber === "string" ? event.serialNumber : "";
+      ndef.onreading = (event) => {
+        const serial = event.serialNumber;
         if (serial) setUid(serial);
         setScanning(false);
       };

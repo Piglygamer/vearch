@@ -48,6 +48,7 @@ function fakeStripeThrowing(err: unknown) {
 }
 
 const RESOLVED = {
+  implantId: 99,
   userId: 42,
   stripeCustomerId: "cus_test123",
   stripePaymentMethodId: "pm_test456",
