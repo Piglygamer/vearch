@@ -5,6 +5,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { paymentRouter } from "./routers/paymentRouter";
 import { paymentEmulatorRouter } from "./routers/paymentEmulator";
+import { microchipRouter } from "./routers/microchipRouter";
 import {
   getWalletsByUserId,
   getTransactionsByUserId,
@@ -345,6 +346,7 @@ export const appRouter = router({
   card: cardRouter,
   payment: paymentRouter,
   paymentEmulator: paymentEmulatorRouter,
+  microchip: microchipRouter,
 });
 
 export type AppRouter = typeof appRouter;
