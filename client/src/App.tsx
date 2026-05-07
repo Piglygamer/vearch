@@ -1,3 +1,4 @@
+import React from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -8,11 +9,7 @@ import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import PaymentEmulator from "./pages/PaymentEmulator";
 import MicrochipDeployment from "./pages/MicrochipDeployment";
-<<<<<<< Updated upstream
-import TerminalDemo from "./pages/TerminalDemo";
-=======
 import VearchCashOrchestrator from "./pages/VearchCashOrchestrator";
->>>>>>> Stashed changes
 
 function Router() {
   return (
@@ -23,11 +20,7 @@ function Router() {
       <Route path="/dashboard/:tab" component={Dashboard} />
       <Route path="/payment-emulator" component={PaymentEmulator} />
       <Route path="/microchip-deployment" component={MicrochipDeployment} />
-<<<<<<< Updated upstream
-      <Route path="/terminal" component={TerminalDemo} />
-=======
       <Route path="/vearch-cash" component={VearchCashOrchestrator} />
->>>>>>> Stashed changes
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
