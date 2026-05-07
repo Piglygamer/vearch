@@ -36,6 +36,13 @@
       "when": 1777533513955,
       "tag": "0004_fair_shard",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1778132877226,
+      "tag": "0005_married_moon_knight",
+      "breakpoints": true
     }
   ]
 }
