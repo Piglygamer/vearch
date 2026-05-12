@@ -10,6 +10,7 @@ import { paymentMethodsRouter } from "./routers/paymentMethodsRouter";
 import { implantsBridgeRouter } from "./routers/implantsBridgeRouter";
 import { transactionsBridgeRouter } from "./routers/transactionsBridgeRouter";
 import { merchantRouter } from "./routers/merchantRouter";
+import { fidesmoRouter } from "./routers/fidesmoRouter";
 import {
   getWalletsByUserId,
   getTransactionsByUserId,
@@ -356,6 +357,7 @@ export const appRouter = router({
   implantsBridge: implantsBridgeRouter,
   transactionsBridge: transactionsBridgeRouter,
   merchant: merchantRouter,
+  fidesmo: fidesmoRouter,
 });
 
 export type AppRouter = typeof appRouter;
