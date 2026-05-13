@@ -27,6 +27,8 @@ import {
   checkPaymentStatus,
 } from "./services/unifiedPaymentService";
 import { liveStripeRouter } from "./routers/liveStripe";
+import { fidesmoNFCRouter } from "./routers/fidesmoNFC";
+import { emvPaymentRouter } from "./routers/emvPayment";
 
 // ============================================================================
 // BANKING ROUTER — All wallet, deposit, withdraw, transaction operations
@@ -360,6 +362,8 @@ export const appRouter = router({
   merchant: merchantRouter,
   fidesmo: fidesmoRouter,
   liveStripe: liveStripeRouter,
+  fidesmoNFC: fidesmoNFCRouter,
+  emvPayment: emvPaymentRouter,
 });
 
 export type AppRouter = typeof appRouter;
