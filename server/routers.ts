@@ -29,6 +29,9 @@ import {
 import { liveStripeRouter } from "./routers/liveStripe";
 import { fidesmoNFCRouter } from "./routers/fidesmoNFC";
 import { emvPaymentRouter } from "./routers/emvPayment";
+import { bankTransferRouter } from "./routers/bankTransferRouter";
+import { merchantDashboardRouter } from "./routers/merchantDashboardRouter";
+import { vearchCashRouter } from "./routers/vearchCashRouter";
 
 // ============================================================================
 // BANKING ROUTER — All wallet, deposit, withdraw, transaction operations
@@ -364,6 +367,9 @@ export const appRouter = router({
   liveStripe: liveStripeRouter,
   fidesmoNFC: fidesmoNFCRouter,
   emvPayment: emvPaymentRouter,
+  bankTransfer: bankTransferRouter,
+  merchantDashboard: merchantDashboardRouter,
+  vearchCash: vearchCashRouter,
 });
 
 export type AppRouter = typeof appRouter;

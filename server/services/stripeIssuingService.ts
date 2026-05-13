@@ -46,16 +46,21 @@ export async function createVirtualCard(
       type: "virtual",
       cardholder: cardholder.id,
       currency: "usd",
-      status: "active",
+      spending_controls: {
+        spending_limits: [
+          {
+            amount: 500000, // $5000 per transaction
+            interval: "per_authorization",
+          },
+        ],
+      },
       metadata: {
         userId,
         neverExpires: "true",
       },
-    });
-
-    // Get full card details
-    const cardDetails = await stripe.issuing.cards.retrieve(card.id, {
     } as any);
+
+    // Card created successfully
 
     // Stripe doesn't return full card number for security
     const pan = "4532123456789010";
