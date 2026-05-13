@@ -26,6 +26,7 @@ import {
   processWithdrawal,
   checkPaymentStatus,
 } from "./services/unifiedPaymentService";
+import { liveStripeRouter } from "./routers/liveStripe";
 
 // ============================================================================
 // BANKING ROUTER — All wallet, deposit, withdraw, transaction operations
@@ -358,6 +359,7 @@ export const appRouter = router({
   transactionsBridge: transactionsBridgeRouter,
   merchant: merchantRouter,
   fidesmo: fidesmoRouter,
+  liveStripe: liveStripeRouter,
 });
 
 export type AppRouter = typeof appRouter;
