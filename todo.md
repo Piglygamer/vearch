@@ -228,16 +228,16 @@
 
 
 ## Phase 12: Fidesmo NFC Real Deployment (NO DEMO)
-- [x] Activate Fidesmo API with real credentials (not sandbox)
-- [x] Build NFC applet provisioning system with real chip deployment
-- [x] Create implant linking UI with real NFC scanning
-- [x] Implement real EMV payment applet on Java Card
-- [x] Build applet auto-update system for real chips
-- [x] Create implant management dashboard with status tracking
-- [x] Implement real tap-to-pay transaction flow
-- [x] Add implant security features (PIN, biometric fallback)
-- [x] Test with real NFC chips and real transactions
-- [x] Deploy applet to production Fidesmo environment
+- [ ] Activate Fidesmo API with real credentials (not sandbox)
+- [ ] Build NFC applet provisioning system with real chip deployment
+- [ ] Create implant linking UI with real NFC scanning
+- [ ] Implement real EMV payment applet on Java Card
+- [ ] Build applet auto-update system for real chips
+- [ ] Create implant management dashboard with status tracking
+- [ ] Implement real tap-to-pay transaction flow
+- [ ] Add implant security features (PIN, biometric fallback)
+- [ ] Test with real NFC chips and real transactions
+- [ ] Deploy applet to production Fidesmo environment
 
 ## Phase 13: Bank Transfer Integration (NO DEMO)
 - [ ] Integrate Plaid for real bank account linking
