@@ -14,6 +14,46 @@ import {
 
 export const fidesmoDeploymentRouter = router({
   /**
+   * Deploy EMV applet to implant (main entry point)
+   */
+  deployToImplant: protectedProcedure
+    .input(
+      z.object({
+        implantId: z.number(),
+        implantUid: z.string(),
+        implantType: z.string(),
+      })
+    )
+    .mutation(async ({ input, ctx }: any) => {
+      try {
+        const fidesmoAppId = process.env.FIDESMO_APP_ID;
+        const vearchAppletAid = process.env.VEARCH_APPLET_AID;
+
+        if (!fidesmoAppId || !vearchAppletAid) {
+          throw new Error("Fidesmo credentials not configured");
+        }
+
+        const deploymentUrl = `https://fidesmo.com/app/${fidesmoAppId}/deploy?applet=${vearchAppletAid}&uid=${input.implantUid}`;
+
+        console.log(
+          `[Fidesmo] Deploying applet to implant ${input.implantUid} (${input.implantType})`
+        );
+
+        return {
+          success: true,
+          deploymentUrl,
+          message: `Deployment initiated for ${input.implantType}`,
+        };
+      } catch (error) {
+        console.error("[Fidesmo Deployment] Error:", error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Deployment failed",
+        };
+      }
+    }),
+
+  /**
    * Deploy compiled applet to user's Apex Flex implant
    */
   deployApplet: protectedProcedure
