@@ -34,6 +34,7 @@ import { merchantDashboardRouter } from "./routers/merchantDashboardRouter";
 import { vearchCashRouter } from "./routers/vearchCashRouter";
 import { depositRouter } from "./routers/depositRouter";
 import { fidesmoDeploymentRouter } from "./routers/fidesmoDeploymentRouter";
+import { paymentAuthorizationRouter } from "./routers/paymentAuthorizationRouter";
 
 // ============================================================================
 // BANKING ROUTER — All wallet, deposit, withdraw, transaction operations
@@ -374,6 +375,7 @@ export const appRouter = router({
   vearchCash: vearchCashRouter,
   deposit: depositRouter,
   fidesmoDeployment: fidesmoDeploymentRouter,
+  paymentAuthorization: paymentAuthorizationRouter,
 });
 
 export type AppRouter = typeof appRouter;
