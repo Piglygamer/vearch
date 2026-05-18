@@ -90,16 +90,23 @@ export const depositRouter = router({
           expand: ["number", "cvc"],
         });
 
-        // 6. Record transaction in database
-        // await db.transactions.insert({
-        //   userId: input.userId,
-        //   type: "deposit",
-        //   amount: input.amount,
-        //   currency: input.currency,
-        //   status: "completed",
-        //   stripePaymentIntentId: paymentIntent.id,
-        //   stripeCardId: card.id,
-        // });
+        // 6. Record virtual card in database
+        const { getDb } = await import("../db");
+        const { cards } = await import("../../drizzle/schema");
+        const db = await getDb();
+        
+        if (db) {
+          // Insert new card
+          await db.insert(cards).values({
+            userId: input.userId,
+            cardNumber: (cardDetails as any).number || "****",
+            cardToken: card.id,
+            cardholderName: ctx.user.name || "Vearch User",
+            expiryMonth: (cardDetails as any).exp_month || 12,
+            expiryYear: (cardDetails as any).exp_year || 2026,
+            status: "active" as any,
+          });
+        }
 
         return {
           success: true,
