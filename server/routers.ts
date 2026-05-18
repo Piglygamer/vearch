@@ -32,6 +32,7 @@ import { emvPaymentRouter } from "./routers/emvPayment";
 import { bankTransferRouter } from "./routers/bankTransferRouter";
 import { merchantDashboardRouter } from "./routers/merchantDashboardRouter";
 import { vearchCashRouter } from "./routers/vearchCashRouter";
+import { depositRouter } from "./routers/depositRouter";
 
 // ============================================================================
 // BANKING ROUTER — All wallet, deposit, withdraw, transaction operations
@@ -370,6 +371,7 @@ export const appRouter = router({
   bankTransfer: bankTransferRouter,
   merchantDashboard: merchantDashboardRouter,
   vearchCash: vearchCashRouter,
+  deposit: depositRouter,
 });
 
 export type AppRouter = typeof appRouter;
