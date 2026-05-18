@@ -5,7 +5,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Home from "./pages/Home";
+import VearchCashLanding from "./pages/VearchCashLanding";
 import Dashboard from "./pages/Dashboard";
 import PaymentEmulator from "./pages/PaymentEmulator";
 import MicrochipDeployment from "./pages/MicrochipDeployment";
@@ -14,8 +14,8 @@ import VearchCashOrchestrator from "./pages/VearchCashOrchestrator";
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/home" component={Home} />
+      <Route path="/" component={VearchCashLanding} />
+      <Route path="/home" component={VearchCashLanding} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/dashboard/:tab" component={Dashboard} />
       <Route path="/payment-emulator" component={PaymentEmulator} />
